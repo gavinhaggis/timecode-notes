@@ -1,0 +1,296 @@
+/* Timecode Notes — gav.fi brand accents over Obsidian's own surfaces.
+ *
+ * Deliberate split: backgrounds and body text come from the vault's theme, so
+ * the panel never looks alien in a light vault, while the accent, tag hues and
+ * label typography are the gav.fi brand. Gold is the interface; the tag hues
+ * are data, because they map to Premiere marker colours.
+ */
+
+.tcnotes {
+  --tc-gold: #ffce10;
+  --tc-gold-bright: #fbf236;
+  --tc-gold-tint: rgba(255, 206, 16, .10);
+  --tc-gold-border: rgba(255, 206, 16, .30);
+
+  /* safe / caution / warning are lifted from the food.me palette */
+  --tc-good: #2ecc71;
+  --tc-ng: #e74c3c;
+  --tc-sound: #f0a500;
+  --tc-broll: #35c3d6;
+  --tc-question: #a78bfa;
+  --tc-prod: #8496c4;
+  --tc-plain: #8b93a3;
+
+  /* Montserrat if the machine has it; no network fetch from a plugin. */
+  --tc-display: 'Montserrat', 'Avenir Next', 'Segoe UI', system-ui, sans-serif;
+
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 2px;
+}
+
+/* ── Brand + section labels ── */
+
+.tcnotes-brand,
+.tcnotes-label {
+  font-family: var(--tc-display);
+  font-size: 0.62rem;
+  font-weight: 900;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  color: var(--tc-gold);
+}
+.tcnotes-brand { margin-bottom: -4px; }
+.tcnotes-label {
+  padding-bottom: 6px;
+  margin-bottom: -6px;
+  border-bottom: 1px solid var(--tc-gold-border);
+}
+
+/* ── Header ── */
+
+.tcnotes-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.tcnotes-title {
+  flex: 1 1 120px;
+  min-width: 0;
+  font-family: var(--tc-display);
+  font-weight: 800;
+}
+.tcnotes-title:focus { border-color: var(--tc-gold); }
+
+.tcnotes-clockrow { text-align: right; }
+.tcnotes-clock {
+  font-family: var(--font-monospace);
+  font-size: 1.35em;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  transition: color .25s ease;
+}
+.tcnotes-clock.tcnotes-live { color: var(--tc-gold); }
+.tcnotes-tc {
+  font-family: var(--font-monospace);
+  font-size: 0.7em;
+  letter-spacing: .06em;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+.tcnotes-transport {
+  border-radius: 999px;
+  font-family: var(--tc-display);
+  font-weight: 800;
+  background-color: var(--tc-gold);
+  color: #222034;
+}
+.tcnotes-transport:hover { background-color: var(--tc-gold-bright); }
+.tcnotes-transport.tcnotes-rolling { background-color: var(--tc-ng); color: #fff; }
+
+/* ── Capture ── */
+
+.tcnotes-capture { display: flex; flex-direction: column; gap: 4px; }
+.tcnotes-input { width: 100%; font-size: 1em; }
+.tcnotes-input:focus {
+  border-color: var(--tc-gold);
+  box-shadow: 0 0 0 3px var(--tc-gold-tint);
+}
+.tcnotes-stamp {
+  font-family: var(--font-monospace);
+  font-size: 0.7em;
+  font-weight: 600;
+  color: var(--tc-gold);
+  font-variant-numeric: tabular-nums;
+  min-height: 1em;
+}
+
+/* ── Tag buttons ── */
+
+.tcnotes-tags { display: flex; flex-wrap: wrap; gap: 5px; }
+.tcnotes-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 11px;
+  font-size: 0.72em;
+  font-weight: 600;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
+}
+.tcnotes-tag:hover { border-color: var(--tc-gold-border); }
+
+.tcnotes-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tc-plain);
+  flex: none;
+}
+.tcnotes-tag-good .tcnotes-dot { background: var(--tc-good); }
+.tcnotes-tag-ng .tcnotes-dot { background: var(--tc-ng); }
+.tcnotes-tag-sound .tcnotes-dot { background: var(--tc-sound); }
+.tcnotes-tag-broll .tcnotes-dot { background: var(--tc-broll); }
+.tcnotes-tag-question .tcnotes-dot { background: var(--tc-question); }
+.tcnotes-tag-prod .tcnotes-dot { background: var(--tc-prod); }
+
+/* ── Summary ── */
+
+.tcnotes-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.75em;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.tcnotes-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--background-modifier-border);
+}
+
+/* ── Actions ── */
+
+.tcnotes-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.tcnotes-actions button {
+  font-family: var(--tc-display);
+  font-size: 0.76em;
+  font-weight: 700;
+  border-radius: 999px;
+}
+.tcnotes-actions button.mod-cta {
+  background-color: transparent;
+  border: 2px solid var(--tc-gold);
+  color: var(--tc-gold);
+}
+.tcnotes-actions button.mod-cta:hover {
+  background-color: var(--tc-gold-tint);
+  border-color: var(--tc-gold-bright);
+  color: var(--tc-gold-bright);
+}
+
+/* ── Timing ── */
+
+.tcnotes-timing { font-size: 0.8em; color: var(--text-muted); }
+.tcnotes-timing summary {
+  cursor: pointer;
+  font-family: var(--tc-display);
+  font-size: 0.78em;
+  font-weight: 900;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  transition: color .15s ease;
+}
+.tcnotes-timing summary:hover { color: var(--tc-gold); }
+.tcnotes-numrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.tcnotes-numrow input {
+  width: 70px;
+  font-family: var(--font-monospace);
+  font-weight: 600;
+}
+.tcnotes-numrow input:focus { border-color: var(--tc-gold); }
+.tcnotes-unit { color: var(--text-faint); }
+
+/* ── Note list ── */
+
+.tcnotes-list { display: flex; flex-direction: column; gap: 4px; }
+.tcnotes-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: baseline;
+  gap: 9px;
+  padding: 6px 9px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-left: 3px solid var(--tc-plain);
+  background: var(--background-secondary);
+  transition: background .15s ease;
+}
+.tcnotes-row:hover { background: var(--background-modifier-hover); }
+.tcnotes-row.tcnotes-tag-good { border-left-color: var(--tc-good); }
+.tcnotes-row.tcnotes-tag-ng { border-left-color: var(--tc-ng); }
+.tcnotes-row.tcnotes-tag-sound { border-left-color: var(--tc-sound); }
+.tcnotes-row.tcnotes-tag-broll { border-left-color: var(--tc-broll); }
+.tcnotes-row.tcnotes-tag-question { border-left-color: var(--tc-question); }
+.tcnotes-row.tcnotes-tag-prod { border-left-color: var(--tc-prod); }
+
+.tcnotes-rowtc {
+  font-family: var(--font-monospace);
+  font-size: 0.76em;
+  font-weight: 600;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+.tcnotes-rowtc.tcnotes-muted { color: var(--text-faint); font-style: italic; font-weight: 500; }
+.tcnotes-rowtext { font-size: 0.86em; word-break: break-word; }
+
+.tcnotes-del {
+  opacity: 0;
+  padding: 0 5px;
+  background: transparent;
+  box-shadow: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: opacity .15s ease, color .15s ease;
+}
+.tcnotes-row:hover .tcnotes-del { opacity: 1; }
+.tcnotes-del:hover { color: var(--tc-ng); }
+
+.tcnotes-empty {
+  color: var(--text-faint);
+  font-size: 0.8em;
+  text-align: center;
+  padding: 14px;
+}
+
+.tcnotes-wake {
+  font-size: 0.58em;
+  font-weight: 900;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--tc-good);
+  margin-top: 2px;
+}
+
+.tcnotes-editable {
+  cursor: text;
+  border-bottom: 1px dashed transparent;
+  transition: color .15s ease, border-color .15s ease;
+}
+.tcnotes-editable:hover { color: var(--tc-gold); border-bottom-color: var(--tc-gold); }
+
+.tcnotes-tcedit {
+  width: 84px;
+  font-family: var(--font-monospace);
+  font-size: 0.76em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tcnotes-tcedit:focus {
+  border-color: var(--tc-gold);
+  box-shadow: 0 0 0 3px var(--tc-gold-tint);
+}
+
+.tcnotes-listhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding-bottom: 6px;
+  margin-bottom: -4px;
+  border-bottom: 1px solid var(--tc-gold-border);
+}
+.tcnotes-label.tcnotes-bare { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.tcnotes-sort { font-size: 0.72em; padding: 2px 6px; }

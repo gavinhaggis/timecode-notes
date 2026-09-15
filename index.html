@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Timecode Notes — on-set notes that land on a timecode</title>
+<meta name="description" content="Type a note while the camera rolls; the first keystroke stamps the timecode. Exports to Obsidian markdown and Premiere Pro markers. Runs entirely in your browser.">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#0a0a0b">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230a0a0b'/><circle cx='16' cy='16' r='7' fill='%23ffce10'/></svg>">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Timecode Notes">
+<meta property="og:description" content="On-set note taking that lands on a timecode. Exports to Obsidian and Premiere Pro.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+/* gav.fi dark brand — shared with food.me and the gav.fi tools hub.
+   Gold is the interface; the tag hues are data, because they map to
+   Premiere marker colours and have to stay distinguishable. */
+:root {
+  /* Neutral near-black ground. Gold stays as the single interface accent so
+     this still reads as gav.fi; everything structural is black/grey/white. */
+  --bg:          #0a0a0b;
+  --surface:     #121214;
+  --surface-2:   #1a1a1d;
+  --header:      #141416;
+  --ink:         #0a0a0b;   /* text that sits on a gold fill */
+
+  --gold:        #ffce10;
+  --gold-bright: #fbf236;
+  --gold-tint:   rgba(255,206,16,.10);
+  --border:      rgba(255,255,255,.08);
+  --border-lit:  rgba(255,255,255,.20);
+
+  --text:        #f2f2f3;
+  --muted:       #a8a8ad;
+  --dim:         #7c7c83;
+
+  /* safe / caution / warning are lifted straight from the food.me palette */
+  --good:     #2ecc71;
+  --ng:       #e74c3c;
+  --sound:    #f0a500;
+  --broll:    #35c3d6;
+  --question: #a78bfa;
+  --prod:     #8496c4;
+  --plain:    #8b93a3;
+
+  --r-sm: 8px;
+  --r: 12px;
+  --r-pill: 999px;
+
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px;
+
+  --t-fast: 150ms ease;
+  --t-base: 250ms ease;
+
+  --font: 'Montserrat', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.5;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font-family: inherit; cursor: pointer; border: none; background: none; }
+input, select { font-family: inherit; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+
+.bar {
+  position: sticky; top: 0; z-index: 100;
+  display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap;
+  padding: var(--sp-3) var(--sp-5);
+  background: var(--header);
+  border-bottom: 2px solid var(--gold);
+}
+.brand { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 260px; }
+.site-title {
+  font-size: .68rem; font-weight: 900; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--gold);
+}
+.brand-row { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; }
+
+.title-input {
+  background: transparent; border: 1px solid transparent; border-radius: var(--r-sm);
+  color: var(--text); font-size: 1rem; font-weight: 800; letter-spacing: .01em;
+  padding: 3px 7px; min-width: 0; flex: 1 1 auto; max-width: 260px;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.title-input:hover { border-color: var(--border); }
+.title-input:focus { outline: none; border-color: var(--gold); background: var(--bg); }
+
+.picker {
+  background: var(--bg); color: var(--muted); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 5px 7px; font-size: .68rem; font-weight: 600;
+  max-width: 150px; cursor: pointer;
+}
+.picker:focus { outline: none; border-color: var(--gold); }
+
+.bar-right { display: flex; align-items: center; gap: var(--sp-4); margin-left: auto; }
+.clock {
+  font-family: var(--mono); font-size: 1.85rem; font-weight: 700; line-height: 1;
+  font-variant-numeric: tabular-nums; color: var(--muted);
+  transition: color var(--t-base);
+}
+.clock.running { color: var(--gold); }
+.tc {
+  font-family: var(--mono); font-size: .62rem; font-weight: 500; letter-spacing: .06em;
+  color: var(--dim); font-variant-numeric: tabular-nums; margin-top: 3px;
+}
+.wake-badge {
+  font-size: .52rem; font-weight: 900; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--good); margin-top: 3px;
+}
+
+/* ── Buttons ──────────────────────────────────────────────────────────── */
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 8px 16px; border-radius: var(--r-pill);
+  border: 2px solid var(--border); background: var(--surface);
+  color: var(--text); font-size: .78rem; font-weight: 700;
+  white-space: nowrap; transition: all var(--t-fast);
+}
+.btn:hover { border-color: var(--border-lit); background: var(--surface-2); }
+
+.btn.primary {
+  background: var(--gold); border-color: var(--gold);
+  color: var(--ink); font-weight: 800;
+}
+.btn.primary:hover { background: var(--gold-bright); border-color: var(--gold-bright); }
+.btn.primary.stop {
+  background: var(--ng); border-color: var(--ng); color: var(--text);
+}
+.btn.primary.stop:hover { background: #ff5c4a; border-color: #ff5c4a; }
+
+.btn.hero {
+  background: transparent; border-color: var(--gold); color: var(--gold); font-weight: 800;
+}
+.btn.hero:hover { background: var(--gold-tint); border-color: var(--gold-bright); color: var(--gold-bright); }
+
+.btn.ghost { background: transparent; color: var(--muted); border-color: transparent; }
+.btn.ghost:hover { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+
+.btn.tiny { padding: 2px 9px; font-size: .65rem; font-weight: 600; border-width: 1px; }
+
+/* ── Layout ───────────────────────────────────────────────────────────── */
+
+main { max-width: 900px; margin: 0 auto; padding: var(--sp-6) var(--sp-5) 72px; }
+section + section { margin-top: var(--sp-5); }
+
+.section-head {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3);
+  padding-bottom: var(--sp-2); margin-bottom: var(--sp-3);
+  border-bottom: 1px solid var(--border);
+}
+.section-label.bare { border: none; padding: 0; margin: 0; }
+.sortpick {
+  background: var(--surface); color: var(--muted); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 4px 7px; font-size: .66rem; font-weight: 600;
+  font-family: inherit; cursor: pointer;
+}
+.sortpick:hover { border-color: var(--border-lit); color: var(--text); }
+.sortpick:focus { outline: none; border-color: var(--gold); }
+
+.section-label {
+  font-size: .62rem; font-weight: 900; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--gold);
+  margin-bottom: var(--sp-3); padding-bottom: var(--sp-2);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ── Capture ──────────────────────────────────────────────────────────── */
+
+.prompt {
+  border: 1px dashed var(--border); border-radius: var(--r);
+  padding: var(--sp-6) var(--sp-5); text-align: center;
+  color: var(--dim); font-size: .8rem; font-weight: 500;
+}
+.composer {
+  display: flex; align-items: center; gap: var(--sp-3);
+  background: var(--surface); border: 2px solid var(--gold);
+  border-radius: var(--r); padding: var(--sp-3) var(--sp-4);
+  box-shadow: 0 0 0 3px var(--gold-tint);
+}
+.composer-input {
+  flex: 1; background: transparent; border: none; color: var(--text);
+  font-size: 1rem; font-weight: 500;
+}
+.composer-input:focus { outline: none; }
+.composer-stamp {
+  font-family: var(--mono); font-size: .7rem; font-weight: 600;
+  color: var(--gold); font-variant-numeric: tabular-nums;
+}
+.hidden { display: none !important; }
+
+/* ── Summary ──────────────────────────────────────────────────────────── */
+
+.summary {
+  display: flex; align-items: center; gap: var(--sp-5); flex-wrap: wrap;
+  padding: var(--sp-4); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--r);
+}
+.stat { display: flex; flex-direction: column; gap: 2px; }
+.stat-num {
+  font-family: var(--mono); font-size: 1.2rem; font-weight: 700;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.stat-label {
+  font-size: .58rem; font-weight: 900; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--dim);
+}
+.stat-tags { display: flex; gap: var(--sp-2); flex-wrap: wrap; margin-left: auto; }
+
+.tagcount {
+  display: flex; align-items: center; gap: 7px;
+  border: 1px solid var(--border); background: var(--bg); color: var(--muted);
+  border-radius: var(--r-pill); padding: 5px 12px;
+  font-size: .68rem; font-weight: 600; transition: all var(--t-fast);
+}
+.tagcount:hover { border-color: var(--border-lit); }
+.tagcount.on { background: var(--gold-tint); border-color: currentColor; font-weight: 700; }
+.dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.tagcount b { font-family: var(--mono); font-weight: 700; }
+
+/* ── Handoff ──────────────────────────────────────────────────────────── */
+
+.handoff { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
+.handoff-rest { display: flex; gap: var(--sp-2); flex-wrap: wrap; }
+
+.timing { width: 100%; margin-top: var(--sp-2); }
+.timing summary {
+  cursor: pointer; font-size: .62rem; font-weight: 900; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--dim); transition: color var(--t-fast);
+}
+.timing summary:hover { color: var(--gold); }
+.timing-body {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--sp-4); margin-top: var(--sp-3); padding: var(--sp-4);
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
+}
+.ctl label {
+  display: block; font-size: .58rem; font-weight: 900; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--muted); margin-bottom: var(--sp-2);
+}
+.ctl .hint {
+  display: block; text-transform: none; letter-spacing: 0; font-size: .68rem;
+  font-weight: 500; color: var(--dim); margin-top: 3px;
+}
+.ctl-row { display: flex; align-items: center; gap: var(--sp-2); }
+.ctl-row input[type=range] { flex: 1; min-width: 60px; accent-color: var(--gold); }
+.ratepick {
+  flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: 6px 7px; font-size: .78rem; font-weight: 600;
+  font-family: inherit; cursor: pointer;
+}
+.ratepick:hover { border-color: var(--border-lit); }
+.ratepick:focus { outline: none; border-color: var(--gold); }
+
+.num {
+  width: 66px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r-sm); color: var(--text); padding: 6px 7px;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600;
+}
+.num:focus { outline: none; border-color: var(--gold); }
+.unit { color: var(--dim); font-size: .7rem; font-weight: 600; }
+
+/* ── Notes ────────────────────────────────────────────────────────────── */
+
+.note-list { list-style: none; }
+.note {
+  display: grid; grid-template-columns: 82px auto 1fr auto;
+  align-items: center; gap: var(--sp-3);
+  padding: 10px var(--sp-3); margin-bottom: 5px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-left: 3px solid var(--plain); border-radius: var(--r-sm);
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.note:hover { background: var(--surface-2); }
+.note-tc {
+  font-family: var(--mono); font-size: .78rem; font-weight: 600;
+  color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.note-tc.muted { color: var(--dim); font-style: italic; font-size: .65rem; font-weight: 500; }
+.note-tc.editable {
+  background: transparent; border: none; padding: 0; text-align: left;
+  cursor: text; border-bottom: 1px dashed transparent; transition: border-color var(--t-fast), color var(--t-fast);
+}
+.note-tc.editable:hover { color: var(--gold); border-bottom-color: var(--gold); }
+.note-tc-edit {
+  width: 82px; background: var(--bg); border: 1px solid var(--gold); border-radius: var(--r-sm);
+  color: var(--text); padding: 3px 5px;
+  font-family: var(--mono); font-size: .78rem; font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.note-tc-edit:focus { outline: none; box-shadow: 0 0 0 3px var(--gold-tint); }
+
+.chip {
+  font-size: .56rem; letter-spacing: .12em; text-transform: uppercase; font-weight: 900;
+  padding: 3px 9px; border-radius: var(--r-pill); white-space: nowrap;
+  background: transparent; border: 1px solid currentColor;
+}
+.note-text { font-size: .85rem; font-weight: 500; word-break: break-word; }
+.note-text:empty::before { content: "—"; color: var(--dim); }
+.note-text:focus { outline: none; border-bottom: 1px solid var(--gold); }
+
+.note-actions { display: flex; gap: 3px; opacity: 0; transition: opacity var(--t-fast); }
+.note:hover .note-actions, .note:focus-within .note-actions { opacity: 1; }
+
+.empty {
+  color: var(--dim); text-align: center; padding: var(--sp-6);
+  font-size: .8rem; font-weight: 500;
+}
+
+/* ── Cheatsheet ───────────────────────────────────────────────────────── */
+
+.cheatsheet { margin-top: var(--sp-6); }
+.cheatsheet summary {
+  cursor: pointer; font-size: .62rem; font-weight: 900; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--dim); transition: color var(--t-fast);
+}
+.cheatsheet summary:hover { color: var(--gold); }
+.cheat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  gap: var(--sp-2); margin-top: var(--sp-4);
+  font-size: .72rem; font-weight: 500; color: var(--muted);
+}
+.cheat-grid > div { display: flex; align-items: center; gap: var(--sp-2); }
+.cheat-grid .chip { flex: none; }
+.cheat-grid .eg { font-family: var(--mono); font-size: .68rem; color: var(--dim); }
+.cheat-grid code { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
+.cheat-foot {
+  margin-top: var(--sp-4); font-size: .7rem; font-weight: 500;
+  color: var(--dim); line-height: 1.6;
+}
+.cheat-foot b { color: var(--muted); font-weight: 700; }
+.cheat-sub {
+  font-size: .58rem; font-weight: 900; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--dim); margin: var(--sp-5) 0 var(--sp-2);
+}
+
+kbd {
+  font-family: var(--mono); font-size: .66rem; font-weight: 600;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 5px; padding: 2px 7px;
+  color: var(--gold); white-space: nowrap;
+}
+
+/* ── Toast ────────────────────────────────────────────────────────────── */
+
+.toast {
+  position: fixed; bottom: var(--sp-5); left: 50%;
+  transform: translateX(-50%) translateY(14px);
+  background: var(--surface-2); border: 1px solid var(--border-lit);
+  border-radius: var(--r-pill); padding: 10px 20px;
+  font-size: .75rem; font-weight: 700; color: var(--text);
+  box-shadow: 0 10px 32px rgba(0,0,0,.5);
+  opacity: 0; pointer-events: none;
+  transition: opacity var(--t-fast), transform var(--t-fast);
+}
+.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 620px) {
+  main { padding: var(--sp-5) var(--sp-4) 56px; }
+  .bar { gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); }
+
+  /* Let the session name have the full width instead of being clipped by
+     the picker sitting next to it. */
+  .brand { flex: 1 1 100%; }
+  .brand-row { flex-wrap: wrap; }
+  .title-input { max-width: none; flex: 1 1 100%; font-size: .95rem; }
+  .picker { flex: 1 1 auto; max-width: none; }
+
+  .bar-right { width: 100%; justify-content: space-between; margin-left: 0; }
+  .clock { font-size: 1.6rem; }
+
+  .note { grid-template-columns: 82px auto 1fr; }
+  .note-actions { opacity: 1; grid-column: 1 / -1; }
+  .stat-tags { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+
+<header class="bar">
+  <div class="brand">
+    <div class="site-title">Timecode Notes</div>
+    <div class="brand-row">
+      <input id="sessionTitle" class="title-input" autocomplete="off">
+      <select id="sessionPicker" class="picker" title="Switch session"></select>
+      <button id="newSession" class="btn ghost tiny" title="Start a new session">New</button>
+    </div>
+  </div>
+  <div class="bar-right">
+    <div>
+      <div id="clock" class="clock">00:00:00</div>
+      <div id="tc" class="tc">00:00:00:00</div>
+      <div id="wakeBadge" class="wake-badge hidden">● screen awake</div>
+    </div>
+    <button id="transport" class="btn primary">Start</button>
+  </div>
+</header>
+
+<main>
+  <section class="capture">
+    <div id="composer" class="composer hidden">
+      <span id="composerTag" class="chip">Note</span>
+      <input id="composerInput" class="composer-input" autocomplete="off" spellcheck="true">
+      <span class="composer-stamp" id="composerStamp"></span>
+    </div>
+    <div id="capturePrompt" class="prompt">
+      Just start typing. The first keystroke is the timestamp.
+    </div>
+  </section>
+
+  <div class="section-label">Session</div>
+  <section class="summary">
+    <div class="stat"><span class="stat-num" id="statDuration">00:00:00</span><span class="stat-label">recorded</span></div>
+    <div class="stat"><span class="stat-num" id="statMarkers">0</span><span class="stat-label">markers</span></div>
+    <div class="stat-tags" id="statTags"></div>
+  </section>
+
+  <div class="section-label">Handoff</div>
+  <section class="handoff">
+    <button class="btn hero" data-export="copy">Copy for Obsidian</button>
+    <div class="handoff-rest">
+      <button class="btn" data-export="md">Markdown</button>
+      <button class="btn" data-export="xml">Premiere XML</button>
+      <button class="btn" data-export="csv">CSV</button>
+      <button class="btn" data-export="chapters">Chapters</button>
+    </div>
+    <details class="timing">
+      <summary>Adjust timing</summary>
+      <div class="timing-body">
+        <div class="ctl">
+          <label for="offset">Start offset<span class="hint">nudge the whole session</span></label>
+          <div class="ctl-row">
+            <input type="range" id="offset" min="-120" max="120" step="0.5" value="0">
+            <input type="number" id="offsetNum" step="0.5" value="0" class="num"><span class="unit">s</span>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="rate">Frame rate<span class="hint">must match the edit</span></label>
+          <div class="ctl-row">
+            <select id="rate" class="ratepick"></select>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="lead">Reaction lead<span class="hint">you always notice it late</span></label>
+          <div class="ctl-row">
+            <input type="range" id="lead" min="-15" max="5" step="0.5" value="-3">
+            <input type="number" id="leadNum" step="0.5" value="-3" class="num"><span class="unit">s</span>
+          </div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="notes">
+    <div class="section-head">
+      <span class="section-label bare">Notes</span>
+      <select id="sortMode" class="sortpick" title="How the list is ordered">
+        <option value="capture-desc">Latest first</option>
+        <option value="capture-asc">Capture order</option>
+        <option value="time-asc">Timecode ↑</option>
+        <option value="time-desc">Timecode ↓</option>
+      </select>
+    </div>
+    <ol id="noteList" class="note-list"></ol>
+    <p id="emptyState" class="empty">No notes yet. Hit <kbd>Start</kbd>, then type.</p>
+  </section>
+
+  <details class="cheatsheet">
+    <summary>Keyboard</summary>
+    <div class="cheat-grid">
+      <div><kbd>any letter</kbd><span>Stamp the time and start a note</span></div>
+      <div><kbd>Enter</kbd><span>Commit — or open an empty note</span></div>
+      <div><kbd>Esc</kbd><span>Discard the note in progress</span></div>
+      <div><kbd>click a timecode</kbd><span>Type an exact time — <code>22:00</code> or <code>00:22:00</code></span></div>
+    </div>
+
+    <div class="cheat-sub">Instant markers — one key, nothing to type</div>
+    <div class="cheat-grid">
+      <div><kbd>1</kbd><span class="chip" style="color:var(--good)">Good</span><span>the take to use</span></div>
+      <div><kbd>2</kbd><span class="chip" style="color:var(--ng)">No good</span><span>don't use this one</span></div>
+      <div><kbd>3</kbd><span class="chip" style="color:var(--sound)">Sound</span><span>audio problem to fix</span></div>
+      <div><kbd>4</kbd><span class="chip" style="color:var(--broll)">B-roll</span><span>cutaway opportunity</span></div>
+      <div><kbd>5</kbd><span class="chip" style="color:var(--question)">Question</span><span>flag it for the edit</span></div>
+      <div><kbd>6</kbd><span class="chip" style="color:var(--prod)">Note</span><span>production note, never a marker</span></div>
+    </div>
+
+    <div class="cheat-sub">Tag as you type — first character of the note</div>
+    <div class="cheat-grid">
+      <div><kbd>*</kbd><span class="chip" style="color:var(--good)">Good</span><span class="eg">*lovely wide shot</span></div>
+      <div><kbd>!</kbd><span class="chip" style="color:var(--ng)">No good</span><span class="eg">!boom in frame</span></div>
+      <div><kbd>~</kbd><span class="chip" style="color:var(--broll)">B-roll</span><span class="eg">~cutaway of her hands</span></div>
+      <div><kbd>?</kbd><span class="chip" style="color:var(--question)">Question</span><span class="eg">?does this cut together</span></div>
+      <div><kbd>#</kbd><span class="chip" style="color:var(--prod)">Note</span><span class="eg">#relight tomorrow</span></div>
+    </div>
+    <p class="cheat-foot">Sound has no shortcut character — use <kbd>3</kbd>, or retag afterwards with <b>cycle</b>. Production notes never become markers.</p>
+  </details>
+</main>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* Timecode Notes — on-set note taking that lands on a timecode.
+ * Single file, no dependencies, no build step. Works over file:// and embedded.
+ */
+(function () {
+  'use strict';
+
+  /* Frame rates.
+   *
+   * `fps` is the true rate used for seconds -> frames. `timebase` is the
+   * nominal integer the timecode string counts in, which is what FCP7 XML
+   * wants alongside the `ntsc` flag. The two differ for the 1000/1001 rates,
+   * and that difference is exactly why drop-frame exists. */
+  var RATES = [
+    { id: '23.976', label: '23.976 — NTSC film', fps: 24000 / 1001, timebase: 24, ntsc: true,  df: false },
+    { id: '24',     label: '24 — film',          fps: 24,           timebase: 24, ntsc: false, df: false },
+    { id: '25',     label: '25 — PAL',           fps: 25,           timebase: 25, ntsc: false, df: false },
+    { id: '29.97df',label: '29.97 drop-frame',   fps: 30000 / 1001, timebase: 30, ntsc: true,  df: true  },
+    { id: '29.97',  label: '29.97 non-drop',     fps: 30000 / 1001, timebase: 30, ntsc: true,  df: false },
+    { id: '30',     label: '30',                 fps: 30,           timebase: 30, ntsc: false, df: false },
+    { id: '50',     label: '50 — PAL HFR',       fps: 50,           timebase: 50, ntsc: false, df: false },
+    { id: '59.94df',label: '59.94 drop-frame',   fps: 60000 / 1001, timebase: 60, ntsc: true,  df: true  },
+    { id: '60',     label: '60',                 fps: 60,           timebase: 60, ntsc: false, df: false }
+  ];
+  var DEFAULT_RATE = '25';
+
+  function rateById(id) {
+    for (var i = 0; i < RATES.length; i++) if (RATES[i].id === id) return RATES[i];
+    for (var j = 0; j < RATES.length; j++) if (RATES[j].id === DEFAULT_RATE) return RATES[j];
+    return RATES[0];
+  }
+
+  /** The rate a session was shot at. */
+  function rateOf(s) { return rateById(s && s.rateId); }
+  var STORAGE_KEY = 'timecode-notes.v2';
+
+  /* ---------------------------------------------------------------- tags */
+
+  // `num` is the instant-marker digit; `sigil` retags a note as you type it.
+  var TAGS = {
+    good:     { num: '1', sigil: '*',  label: 'Good',     color: 'Green',  css: '--good' },
+    ng:       { num: '2', sigil: '!',  label: 'No good',  color: 'Red',    css: '--ng' },
+    sound:    { num: '3', sigil: null, label: 'Sound',    color: 'Yellow', css: '--sound' },
+    broll:    { num: '4', sigil: '~',  label: 'B-roll',   color: 'Cyan',   css: '--broll' },
+    question: { num: '5', sigil: '?',  label: 'Question', color: 'Purple', css: '--question' },
+    prod:     { num: '6', sigil: '#',  label: 'Note',     color: 'Blue',   css: '--prod' },
+    plain:    { num: null, sigil: null, label: 'Mark',    color: 'Blue',   css: '--plain' }
+  };
+  var TAG_ORDER = ['good', 'ng', 'sound', 'broll', 'question', 'prod', 'plain'];
+
+  var BY_NUM = {}, BY_SIGIL = {};
+  TAG_ORDER.forEach(function (k) {
+    if (TAGS[k].num) BY_NUM[TAGS[k].num] = k;
+    if (TAGS[k].sigil) BY_SIGIL[TAGS[k].sigil] = k;
+  });
+
+  /* ------------------------------------------------------------ timecode */
+
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+
+  /** Seconds to a timecode string for the given rate.
+   *  Drop-frame is rendered with a semicolon, as every NLE does. */
+  function toTimecode(sec, rate) {
+    rate = rate || rateById(DEFAULT_RATE);
+    return framesToTimecode(toFrames(sec, rate), rate);
+  }
+
+  function framesToTimecode(totalFrames, rate) {
+    var tb = rate.timebase;
+    if (!rate.df) {
+      var f = totalFrames % tb;
+      var whole = Math.floor(totalFrames / tb);
+      return pad(Math.floor(whole / 3600)) + ':' + pad(Math.floor(whole / 60) % 60) +
+             ':' + pad(whole % 60) + ':' + pad(f);
+    }
+
+    /* Drop-frame renumbering: skip 2 labels a minute at 30, 4 at 60, except on
+     * every tenth minute. The frame COUNT never changes — only the label. */
+    var drop = tb / 30 * 2;
+    var per10 = tb * 60 * 10 - drop * 9;
+    var perMin = tb * 60 - drop;
+
+    var tens = Math.floor(totalFrames / per10);
+    var rest = totalFrames % per10;
+    var adjusted = totalFrames + drop * 9 * tens +
+      (rest < drop ? 0 : drop * Math.floor((rest - drop) / perMin));
+
+    return pad(Math.floor(adjusted / (tb * 3600)) % 24) + ':' +
+           pad(Math.floor(adjusted / (tb * 60)) % 60) + ':' +
+           pad(Math.floor(adjusted / tb) % 60) + ';' + pad(adjusted % tb);
+  }
+
+  /** Seconds to HH:MM:SS — the form you paste into a note. */
+  function toClock(sec) {
+    if (!isFinite(sec) || sec < 0) sec = 0;
+    var whole = Math.floor(sec);
+    return pad(Math.floor(whole / 3600)) + ':' + pad(Math.floor(whole / 60) % 60) + ':' + pad(whole % 60);
+  }
+
+  function toFrames(sec, rate) {
+    return Math.max(0, Math.round((isFinite(sec) ? sec : 0) * (rate || rateById(DEFAULT_RATE)).fps));
+  }
+
+  /** Read a time a human typed. Rightmost field is always seconds, so "22:00"
+   *  is 22 minutes and "1:02:03" is an hour. Accepts bare seconds and an
+   *  optional trailing frames field. Returns null if it can't be read. */
+  function parseTimecode(str) {
+    if (str == null) return null;
+    var text = String(str).trim();
+    if (!text) return null;
+    if (/^\d+(\.\d+)?$/.test(text)) return parseFloat(text);
+
+    var parts = text.split(':');
+    if (parts.length < 2 || parts.length > 4) return null;
+    for (var i = 0; i < parts.length; i++) {
+      if (!/^\d+(\.\d+)?$/.test(parts[i].trim())) return null;
+    }
+    var nums = parts.map(function (part) { return parseFloat(part); });
+    var frames = nums.length === 4 ? nums.pop() : 0;
+    var sec = nums.length === 3
+      ? nums[0] * 3600 + nums[1] * 60 + nums[2]
+      : nums[0] * 60 + nums[1];
+    return sec + frames / rateOf(session()).fps;
+  }
+
+  /** Local calendar date — never UTC, or a late shoot gets yesterday's name. */
+  function dateStamp(ms) {
+    var d = ms ? new Date(ms) : new Date();
+    return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+  }
+
+  /* --------------------------------------------------------------- state */
+
+  function newSession() {
+    return {
+      id: 's' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      title: dateStamp(),        // the producer renames it afterwards
+      rateId: state && state.lastRateId ? state.lastRateId : DEFAULT_RATE,
+      createdAt: Date.now(),
+      startedAt: null,           // wall clock of the moment you called zero
+      stoppedAt: null,
+      offsetSec: 0,
+      leadSec: -3,               // you always notice it late
+      notes: []
+    };
+  }
+
+  var state = load() || { sessions: [newSession()], activeId: null };
+  if (!state.activeId) state.activeId = state.sessions[0].id;
+  if (!state.sortMode) state.sortMode = 'capture-desc';
+  if (!state.lastRateId) state.lastRateId = DEFAULT_RATE;
+
+  var ui = { composerOpen: false, draftTag: 'plain', draftKeyDownAt: 0, filter: null };
+
+  function session() {
+    for (var i = 0; i < state.sessions.length; i++) {
+      if (state.sessions[i].id === state.activeId) return state.sessions[i];
+    }
+    state.activeId = state.sessions[0].id;
+    return state.sessions[0];
+  }
+
+  function isRunning(s) { return !!s.startedAt && !s.stoppedAt; }
+
+  function save() {
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch (err) { console.warn('Could not persist session:', err); }
+  }
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) return null;
+      var parsed = JSON.parse(raw);
+      return (parsed && parsed.sessions && parsed.sessions.length) ? parsed : null;
+    } catch (err) { console.warn('Could not read saved sessions:', err); return null; }
+  }
+
+  /* ---------------------------------------------------------------- math */
+
+  /** Where a note lands in the footage, in seconds. Null means "no timecode". */
+  function noteSeconds(s, note) {
+    if (note.tag === 'prod' || !s.startedAt) return null;
+    var base = (note.keyDownAt - s.startedAt) / 1000;
+    return Math.max(0, base + s.offsetSec + s.leadSec + (note.nudgeSec || 0));
+  }
+
+  /** Capture order, oldest first. Returns a fresh array, so callers that want
+   *  newest-first display order may reverse it without affecting exports. */
+  function sortedNotes(s) {
+    return s.notes.slice().sort(function (a, b) { return a.keyDownAt - b.keyDownAt; });
+  }
+
+  /** Notes that become markers, in timeline order, with resolved seconds. */
+  function markerNotes(s) {
+    return sortedNotes(s)
+      .map(function (n) { return { note: n, sec: noteSeconds(s, n) }; })
+      .filter(function (r) { return r.sec !== null; })
+      .sort(function (a, b) { return a.sec - b.sec; });
+  }
+
+  function elapsed(s) {
+    return s.startedAt ? ((s.stoppedAt || Date.now()) - s.startedAt) / 1000 : 0;
+  }
+
+  /** Duration to report in an export. A session that was never stopped would
+   *  otherwise claim every hour since it started, so fall back to the last
+   *  marker — the only defensible end point we actually know about. */
+  function recordedSeconds(s) {
+    if (!s.startedAt) return 0;
+    if (s.stoppedAt) return (s.stoppedAt - s.startedAt) / 1000;
+    var rows = markerNotes(s);
+    return rows.length ? rows[rows.length - 1].sec : 0;
+  }
+
+  /* ------------------------------------------------------------ elements */
+
+  var el = {};
+  ['sessionTitle', 'sessionPicker', 'newSession', 'clock', 'tc', 'transport',
+   'composer', 'composerTag', 'composerInput', 'composerStamp', 'capturePrompt',
+   'offset', 'offsetNum', 'lead', 'leadNum', 'noteList', 'emptyState',
+   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate']
+    .forEach(function (id) { el[id] = document.getElementById(id); });
+
+  /* ----------------------------------------------------------- wake lock */
+
+  /* A phone or tablet used as the note taker will sleep mid-take otherwise.
+   * The browser drops the lock whenever the page hides, so it has to be
+   * re-acquired on visibilitychange for as long as the session is rolling.
+   * Unsupported browsers and insecure origins just fail quietly. */
+  var wakeLock = null;
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    var lock = wakeLock;
+    wakeLock = null;
+    lock.release().catch(function () {});
+    el.wakeBadge.classList.add('hidden');
+  }
+
+  function requestWakeLock() {
+    if (wakeLock || !('wakeLock' in navigator)) return;
+    navigator.wakeLock.request('screen').then(function (lock) {
+      wakeLock = lock;
+      el.wakeBadge.classList.remove('hidden');
+      lock.addEventListener('release', function () {
+        wakeLock = null;
+        el.wakeBadge.classList.add('hidden');
+      });
+    }).catch(function () {
+      // Denied, insecure context, or battery saver. Nothing to do about it.
+      el.wakeBadge.classList.add('hidden');
+    });
+  }
+
+  function syncWakeLock() {
+    if (isRunning(session())) requestWakeLock();
+    else releaseWakeLock();
+  }
+
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') syncWakeLock();
+  });
+
+  /* ----------------------------------------------------------- transport */
+
+  function toggleTransport() {
+    var s = session();
+    if (!s.startedAt) { s.startedAt = Date.now(); s.stoppedAt = null; toast('Rolling — zero is now'); }
+    else if (!s.stoppedAt) { s.stoppedAt = Date.now(); toast('Stopped'); }
+    else { s.stoppedAt = null; toast('Resumed'); }
+    save(); render(); syncWakeLock();
+  }
+
+  function tickClock() {
+    var s = session(), e = elapsed(s);
+    el.clock.textContent = toClock(e);
+    el.clock.classList.toggle('running', isRunning(s));
+    el.tc.textContent = toTimecode(e, rateOf(s));
+    el.statDuration.textContent = toClock(e);
+    requestAnimationFrame(tickClock);
+  }
+
+  /* ------------------------------------------------------------ composer */
+
+  function openComposer(firstChar, stampedAt) {
+    var s = session();
+    ui.composerOpen = true;
+    ui.draftKeyDownAt = stampedAt || Date.now();
+    ui.draftTag = 'plain';
+
+    var text = firstChar || '';
+    if (text && BY_SIGIL[text]) { ui.draftTag = BY_SIGIL[text]; text = ''; }
+
+    el.composerInput.value = text;
+    el.composer.classList.remove('hidden');
+    el.capturePrompt.classList.add('hidden');
+    el.composerInput.focus();
+
+    var sec = s.startedAt ? (ui.draftKeyDownAt - s.startedAt) / 1000 + s.offsetSec + s.leadSec : null;
+    el.composerStamp.textContent = sec === null ? 'no timecode' : toTimecode(sec);
+    paintChip(el.composerTag, ui.draftTag);
+  }
+
+  function closeComposer() {
+    ui.composerOpen = false;
+    el.composerInput.value = '';
+    el.composer.classList.add('hidden');
+    el.capturePrompt.classList.remove('hidden');
+  }
+
+  function commitComposer() {
+    var raw = el.composerInput.value, tag = ui.draftTag;
+
+    // A sigil typed as the first character still retags, even when the
+    // composer was opened by Enter or by a leading space.
+    var trimmed = raw.replace(/^\s+/, '');
+    if (trimmed.length && BY_SIGIL[trimmed.charAt(0)]) {
+      tag = BY_SIGIL[trimmed.charAt(0)];
+      trimmed = trimmed.slice(1);
+    }
+    var text = trimmed.trim();
+    if (!text && tag === 'plain') { closeComposer(); return; }
+
+    addNote(tag, text, ui.draftKeyDownAt);
+    closeComposer();
+  }
+
+  function addNote(tag, text, keyDownAt) {
+    var s = session();
+    // Before the timer starts there is nothing to anchor to, so a bare note
+    // becomes a production note rather than a marker at zero.
+    var effective = (!s.startedAt && tag === 'plain') ? 'prod' : tag;
+
+    s.notes.push({
+      id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      wallClock: new Date(keyDownAt).toISOString(),
+      keyDownAt: keyDownAt,
+      committedAt: Date.now(),
+      tag: effective,
+      text: text || '',
+      nudgeSec: 0
+    });
+    save(); render();
+  }
+
+  /* ------------------------------------------------------------ keyboard */
+
+  function typingElsewhere(t) {
+    if (!t || t === document.body || t === el.composerInput) return false;
+    return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' ||
+           t.tagName === 'SELECT' || t.isContentEditable;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+
+    if (ui.composerOpen) {
+      if (e.key === 'Enter') { e.preventDefault(); commitComposer(); }
+      else if (e.key === 'Escape') { e.preventDefault(); closeComposer(); }
+      return;
+    }
+    if (typingElsewhere(e.target)) return;
+
+    var stampedAt = Date.now();          // stamp before any work, not after
+
+    if (e.key === 'Enter') { e.preventDefault(); openComposer('', stampedAt); return; }
+    if (BY_NUM[e.key]) {
+      e.preventDefault();
+      addNote(BY_NUM[e.key], '', stampedAt);
+      toast(TAGS[BY_NUM[e.key]].label + ' marked');
+      return;
+    }
+    if (e.key.length === 1) { e.preventDefault(); openComposer(e.key, stampedAt); }
+  });
+
+  /* -------------------------------------------------------------- render */
+
+  function paintChip(node, tag) {
+    node.textContent = TAGS[tag].label;
+    node.style.color = 'var(' + TAGS[tag].css + ')';
+  }
+
+  function render() {
+    var s = session();
+    el.sessionTitle.value = s.title;
+    el.offset.value = el.offsetNum.value = s.offsetSec;
+    el.lead.value = el.leadNum.value = s.leadSec;
+    el.sortMode.value = state.sortMode;
+    el.rate.value = s.rateId;
+    el.transport.textContent = !s.startedAt ? 'Start' : (s.stoppedAt ? 'Resume' : 'Stop');
+    el.transport.classList.toggle('stop', isRunning(s));
+    renderPicker(s); renderSummary(s); renderNotes(s);
+  }
+
+  function renderPicker(s) {
+    el.sessionPicker.innerHTML = '';
+    state.sessions.slice().sort(function (a, b) { return b.createdAt - a.createdAt; })
+      .forEach(function (item) {
+        var opt = document.createElement('option');
+        opt.value = item.id;
+        opt.textContent = item.title + ' · ' + item.notes.length;
+        if (item.id === s.id) opt.selected = true;
+        el.sessionPicker.appendChild(opt);
+      });
+  }
+
+  function renderSummary(s) {
+    el.statMarkers.textContent = markerNotes(s).length;
+
+    var counts = {};
+    s.notes.forEach(function (n) { counts[n.tag] = (counts[n.tag] || 0) + 1; });
+
+    el.statTags.innerHTML = '';
+    TAG_ORDER.filter(function (t) { return counts[t]; }).forEach(function (tag) {
+      var b = document.createElement('button');
+      b.className = 'tagcount' + (ui.filter === tag ? ' on' : '');
+      if (ui.filter === tag) b.style.color = 'var(' + TAGS[tag].css + ')';
+
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = 'var(' + TAGS[tag].css + ')';
+
+      var num = document.createElement('b');
+      num.textContent = counts[tag];
+
+      b.appendChild(dot);
+      b.appendChild(document.createTextNode(TAGS[tag].label));
+      b.appendChild(num);
+      b.addEventListener('click', function () {
+        ui.filter = ui.filter === tag ? null : tag;
+        render();
+      });
+      el.statTags.appendChild(b);
+    });
+  }
+
+  /* Display order only. Exports never consult this — see markerNotes.
+   * In the timecode modes, untimed production notes sink to the bottom and
+   * keep capture order among themselves, since they have no time to sort by. */
+  function displayNotes(s) {
+    var rows = sortedNotes(s).filter(function (n) { return !ui.filter || n.tag === ui.filter; });
+    var mode = state.sortMode || 'capture-desc';
+
+    if (mode === 'capture-asc') return rows;
+    if (mode === 'capture-desc') return rows.reverse();
+
+    var timed = [], untimed = [];
+    rows.forEach(function (n) {
+      (noteSeconds(s, n) === null ? untimed : timed).push(n);
+    });
+    timed.sort(function (a, b) { return noteSeconds(s, a) - noteSeconds(s, b); });
+    if (mode === 'time-desc') timed.reverse();
+    return timed.concat(untimed);
+  }
+
+  function renderNotes(s) {
+    var rows = displayNotes(s);
+    el.emptyState.classList.toggle('hidden', rows.length > 0);
+    el.noteList.innerHTML = '';
+    rows.forEach(function (n) { el.noteList.appendChild(renderNote(s, n)); });
+  }
+
+  function renderNote(s, note) {
+    var li = document.createElement('li');
+    li.className = 'note';
+    li.style.borderLeftColor = 'var(' + TAGS[note.tag].css + ')';
+
+    var sec = noteSeconds(s, note);
+    var tc = document.createElement(sec === null ? 'div' : 'button');
+    tc.className = 'note-tc' + (sec === null ? ' muted' : ' editable');
+    tc.textContent = sec === null ? 'untimed' : toClock(sec);
+    if (sec !== null) {
+      tc.title = toTimecode(sec, rateOf(s)) + ' @ ' + rateOf(s).label + ' — click to set an exact time';
+      tc.addEventListener('click', function () { editNoteTime(s, note, tc); });
+    }
+
+    var chip = document.createElement('span');
+    chip.className = 'chip';
+    paintChip(chip, note.tag);
+
+    var body = document.createElement('div');
+    body.className = 'note-text';
+    body.textContent = note.text;
+    body.contentEditable = 'true';
+    body.addEventListener('blur', function () { note.text = body.textContent.trim(); save(); });
+
+    var actions = document.createElement('div');
+    actions.className = 'note-actions';
+    actions.appendChild(actionButton('−1s', function () { nudge(note, -1); }));
+    actions.appendChild(actionButton('+1s', function () { nudge(note, 1); }));
+    actions.appendChild(actionButton('cycle', function () { cycleTag(note); }));
+    actions.appendChild(actionButton('×', function () { removeNote(s, note); }));
+
+    li.appendChild(tc); li.appendChild(chip); li.appendChild(body); li.appendChild(actions);
+    return li;
+  }
+
+  function actionButton(label, fn) {
+    var b = document.createElement('button');
+    b.className = 'btn ghost tiny';
+    b.textContent = label;
+    b.addEventListener('click', fn);
+    return b;
+  }
+
+  function nudge(note, d) { note.nudgeSec = (note.nudgeSec || 0) + d; save(); render(); }
+
+  /* Retiming stores a delta rather than an absolute, so a note moved by hand
+   * still travels with any later change to the session offset. */
+  function retime(s, note, targetSec) {
+    var base = (note.keyDownAt - s.startedAt) / 1000;
+    note.nudgeSec = targetSec - (base + s.offsetSec + s.leadSec);
+    save();
+    render();
+  }
+
+  /** Swap the timecode cell for an input so an exact time can be typed. */
+  function editNoteTime(s, note, cell) {
+    var input = document.createElement('input');
+    input.className = 'note-tc-edit';
+    input.value = toClock(noteSeconds(s, note));
+    input.setAttribute('aria-label', 'Set this note\u2019s timecode');
+    cell.replaceWith(input);
+    input.focus();
+    input.select();
+
+    var settled = false;
+    function finish(apply) {
+      if (settled) return;
+      settled = true;
+      if (!apply) { render(); return; }
+
+      var target = parseTimecode(input.value);
+      if (target === null) {
+        toast('Could not read that time — try 22:00 or 00:22:00');
+        render();
+        return;
+      }
+      retime(s, note, Math.max(0, target));
+      toast('Moved to ' + toClock(Math.max(0, target)));
+    }
+
+    input.addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+      else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+    });
+    input.addEventListener('blur', function () { finish(true); });
+  }
+  function cycleTag(note) {
+    note.tag = TAG_ORDER[(TAG_ORDER.indexOf(note.tag) + 1) % TAG_ORDER.length];
+    save(); render();
+  }
+  function removeNote(s, note) {
+    s.notes = s.notes.filter(function (n) { return n.id !== note.id; });
+    save(); render();
+  }
+
+  /* ------------------------------------------------------------- exports */
+
+  function slug(s) {
+    var base = String(s.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    var date = dateStamp(s.createdAt);
+    if (!base) return date;
+    return base.indexOf(date) === 0 ? base : date + '-' + base;
+  }
+
+  function buildMarkdown(s) {
+    var lines = ['# ' + s.title, ''];
+    lines.push('- Recorded: ' + toClock(recordedSeconds(s)) + ' · ' + rateOf(s).label);
+    lines.push('- Offset: ' + s.offsetSec + 's · Reaction lead: ' + s.leadSec + 's');
+    lines.push('');
+
+    markerNotes(s).forEach(function (row) {
+      var stamp = '- `' + toTimecode(row.sec, rateOf(s)) + '` **' + TAGS[row.note.tag].label + '**';
+      lines.push(row.note.text ? stamp + ' ' + row.note.text : stamp);
+    });
+
+    var untimed = sortedNotes(s).filter(function (n) { return noteSeconds(s, n) === null; });
+    if (untimed.length) {
+      lines.push('', '## Production notes', '');
+      untimed.forEach(function (n) { lines.push('- ' + (n.text || '—')); });
+    }
+    return lines.join('\n') + '\n';
+  }
+
+  function escapeXml(str) {
+    return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+  }
+
+  function buildFcpXml(s) {
+    var rate = rateOf(s);
+    var rateBlock = '<rate><timebase>' + rate.timebase + '</timebase><ntsc>' +
+                    (rate.ntsc ? 'TRUE' : 'FALSE') + '</ntsc></rate>';
+    var rows = markerNotes(s);
+    var duration = toFrames((rows.length ? rows[rows.length - 1].sec : 0) + 30, rate);
+    var o = [];
+    o.push('<?xml version="1.0" encoding="UTF-8"?>');
+    o.push('<!DOCTYPE xmeml>');
+    o.push('<xmeml version="4">');
+    o.push('  <sequence id="timecode-notes-' + escapeXml(s.id) + '">');
+    o.push('    <name>' + escapeXml(s.title) + '</name>');
+    o.push('    <duration>' + duration + '</duration>');
+    o.push('    ' + rateBlock);
+    o.push('    <timecode>');
+    o.push('      ' + rateBlock);
+    o.push('      <string>' + framesToTimecode(0, rate) + '</string><frame>0</frame>' +
+           '<displayformat>' + (rate.df ? 'DF' : 'NDF') + '</displayformat>');
+    o.push('    </timecode>');
+    o.push('    <media><video><format><samplecharacteristics>');
+    o.push('      ' + rateBlock);
+    o.push('      <width>1920</width><height>1080</height>');
+    o.push('    </samplecharacteristics></format></video></media>');
+
+    rows.forEach(function (row) {
+      // FCP7 markers carry no colour field, so the tag rides in the name
+      // where it is still readable at a glance in the timeline.
+      var label = '[' + TAGS[row.note.tag].label.toUpperCase() + ']';
+      var name = row.note.text ? label + ' ' + row.note.text : label;
+      var comment = TAGS[row.note.tag].color + (row.note.text ? ' · ' + row.note.text : '');
+      o.push('    <marker>');
+      o.push('      <name>' + escapeXml(name) + '</name>');
+      o.push('      <comment>' + escapeXml(comment) + '</comment>');
+      o.push('      <in>' + toFrames(row.sec, rate) + '</in><out>-1</out>');
+      o.push('    </marker>');
+    });
+
+    o.push('  </sequence>');
+    o.push('</xmeml>');
+    return o.join('\n') + '\n';
+  }
+
+  function buildCsv(s) {
+    var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
+    var lines = [['Timecode', 'Seconds', 'Tag', 'Colour', 'Note', 'Wall clock'].map(cell).join(',')];
+    markerNotes(s).forEach(function (r) {
+      lines.push([toTimecode(r.sec, rateOf(s)), r.sec.toFixed(2), TAGS[r.note.tag].label,
+                  TAGS[r.note.tag].color, r.note.text, r.note.wallClock].map(cell).join(','));
+    });
+    return lines.join('\n') + '\n';
+  }
+
+  function buildChapters(s) {
+    return markerNotes(s).map(function (r) {
+      return toClock(r.sec) + ' ' + (r.note.text || TAGS[r.note.tag].label);
+    }).join('\n') + '\n';
+  }
+
+  function download(filename, text, mime) {
+    var blob = new Blob([text], { type: mime + ';charset=utf-8' });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
+  }
+
+  document.addEventListener('click', function (e) {
+    var kind = e.target.getAttribute && e.target.getAttribute('data-export');
+    if (!kind) return;
+    var s = session(), name = slug(s);
+
+    if (kind === 'copy') {
+      copyText(buildMarkdown(s));
+      return;
+    }
+    if (kind === 'md') download(name + '.md', buildMarkdown(s), 'text/markdown');
+    else if (kind === 'xml') download(name + '.xml', buildFcpXml(s), 'application/xml');
+    else if (kind === 'csv') download(name + '.csv', buildCsv(s), 'text/csv');
+    else if (kind === 'chapters') download(name + '-chapters.txt', buildChapters(s), 'text/plain');
+    toast('Exported ' + name);
+  });
+
+  /** Clipboard API needs a secure context, so keep a textarea fallback. */
+  function copyText(text) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (err) { ok = false; }
+      document.body.removeChild(ta);
+      toast(ok ? 'Copied — paste into Obsidian' : 'Copy blocked — use the Markdown button');
+    }
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text)
+        .then(function () { toast('Copied — paste into Obsidian'); })
+        .catch(fallback);
+    } else { fallback(); }
+  }
+
+  /* ---------------------------------------------------------------- misc */
+
+  var toastTimer = null;
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.toast.classList.remove('show'); }, 1600);
+  }
+
+  el.transport.addEventListener('click', toggleTransport);
+
+  RATES.forEach(function (r) {
+    var opt = document.createElement('option');
+    opt.value = r.id;
+    opt.textContent = r.label;
+    el.rate.appendChild(opt);
+  });
+
+  el.rate.addEventListener('change', function () {
+    session().rateId = el.rate.value;
+    state.lastRateId = el.rate.value;
+    save();
+    render();
+    toast('Frame rate set to ' + rateById(el.rate.value).label);
+  });
+
+  el.sortMode.addEventListener('change', function () {
+    state.sortMode = el.sortMode.value;
+    save();
+    renderNotes(session());
+  });
+
+  el.sessionTitle.addEventListener('input', function () {
+    session().title = el.sessionTitle.value;
+    save(); renderPicker(session());
+  });
+
+  el.sessionPicker.addEventListener('change', function () {
+    state.activeId = el.sessionPicker.value;
+    ui.filter = null;
+    save(); render();
+  });
+
+  el.newSession.addEventListener('click', function () {
+    var s = newSession();
+    state.sessions.push(s);
+    state.activeId = s.id;
+    ui.filter = null;
+    save(); render();
+    toast('New session — ' + s.title);
+  });
+
+  function bindSlider(range, num, key) {
+    function apply(value) {
+      var v = parseFloat(value);
+      if (!isFinite(v)) return;
+      session()[key] = v;
+      range.value = num.value = v;
+      save(); renderNotes(session());
+    }
+    range.addEventListener('input', function () { apply(range.value); });
+    num.addEventListener('input', function () { apply(num.value); });
+  }
+  bindSlider(el.offset, el.offsetNum, 'offsetSec');
+  bindSlider(el.lead, el.leadNum, 'leadSec');
+
+  // Clicking away from an open composer should keep the note, not lose it.
+  document.addEventListener('mousedown', function (e) {
+    if (ui.composerOpen && !el.composer.contains(e.target)) commitComposer();
+  });
+
+  render();
+  tickClock();
+  syncWakeLock();
+})();
+</script>
+</body>
+</html>

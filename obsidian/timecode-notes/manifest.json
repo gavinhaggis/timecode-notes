@@ -1,0 +1,9 @@
+{
+  "id": "timecode-notes",
+  "name": "Timecode Notes",
+  "version": "1.1.0",
+  "minAppVersion": "1.4.0",
+  "description": "On-set note taking that lands on a timecode. The first keystroke stamps the time; the session exports as markdown or Premiere markers.",
+  "author": "Gavin Hanigan",
+  "isDesktopOnly": false
+}
