@@ -294,3 +294,13 @@
 }
 .tcnotes-label.tcnotes-bare { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
 .tcnotes-sort { font-size: 0.72em; padding: 2px 6px; }
+
+.tcnotes-starttc {
+  width: 104px;
+  font-family: var(--font-monospace);
+  font-size: 0.76em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.tcnotes-starttc:focus { border-color: var(--tc-gold); }
+.tcnotes-numrow button { font-size: 0.72em; padding: 2px 8px; border-radius: 999px; }

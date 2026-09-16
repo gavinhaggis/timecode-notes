@@ -247,7 +247,7 @@ section + section { margin-top: var(--sp-5); }
 }
 .timing summary:hover { color: var(--gold); }
 .timing-body {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(240px, 100%), 1fr));
   gap: var(--sp-4); margin-top: var(--sp-3); padding: var(--sp-4);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r);
 }
@@ -259,7 +259,7 @@ section + section { margin-top: var(--sp-5); }
   display: block; text-transform: none; letter-spacing: 0; font-size: .68rem;
   font-weight: 500; color: var(--dim); margin-top: 3px;
 }
-.ctl-row { display: flex; align-items: center; gap: var(--sp-2); }
+.ctl-row { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; }
 .ctl-row input[type=range] { flex: 1; min-width: 60px; accent-color: var(--gold); }
 .ratepick {
   flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--border);
@@ -268,6 +268,11 @@ section + section { margin-top: var(--sp-5); }
 }
 .ratepick:hover { border-color: var(--border-lit); }
 .ratepick:focus { outline: none; border-color: var(--gold); }
+
+.num.wide { width: 108px; }
+.btn.danger { color: var(--ng); }
+.btn.danger:hover { background: rgba(231,76,60,.12); border-color: var(--ng); color: var(--ng); }
+.btn.danger.armed { background: var(--ng); border-color: var(--ng); color: var(--text); }
 
 .num {
   width: 66px; background: var(--bg); border: 1px solid var(--border);
@@ -332,7 +337,7 @@ section + section { margin-top: var(--sp-5); }
 }
 .cheatsheet summary:hover { color: var(--gold); }
 .cheat-grid {
-  display: grid; grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
   gap: var(--sp-2); margin-top: var(--sp-4);
   font-size: .72rem; font-weight: 500; color: var(--muted);
 }
@@ -400,6 +405,7 @@ kbd {
       <input id="sessionTitle" class="title-input" autocomplete="off">
       <select id="sessionPicker" class="picker" title="Switch session"></select>
       <button id="newSession" class="btn ghost tiny" title="Start a new session">New</button>
+      <button id="deleteSession" class="btn ghost tiny danger" title="Delete this session">Delete</button>
     </div>
   </div>
   <div class="bar-right">
@@ -454,6 +460,15 @@ kbd {
           <label for="rate">Frame rate<span class="hint">must match the edit</span></label>
           <div class="ctl-row">
             <select id="rate" class="ratepick"></select>
+          </div>
+        </div>
+        <div class="ctl">
+          <label for="startTc">Start timecode<span class="hint">what the camera reads at zero</span></label>
+          <div class="ctl-row">
+            <input type="text" id="startTc" class="num wide" autocomplete="off" spellcheck="false">
+            <button id="tcLocal" class="btn ghost tiny" title="Set from the local time the session started">Local</button>
+            <button id="tcUtc" class="btn ghost tiny" title="Set from UTC at the session start">UTC</button>
+            <button id="tcZero" class="btn ghost tiny" title="Back to 00:00:00:00">Zero</button>
           </div>
         </div>
         <div class="ctl">
@@ -586,7 +601,8 @@ kbd {
     if (!rate.df) {
       var f = totalFrames % tb;
       var whole = Math.floor(totalFrames / tb);
-      return pad(Math.floor(whole / 3600)) + ':' + pad(Math.floor(whole / 60) % 60) +
+      // Timecode is a clock: it wraps at 24h rather than running to 25:00:00.
+      return pad(Math.floor(whole / 3600) % 24) + ':' + pad(Math.floor(whole / 60) % 60) +
              ':' + pad(whole % 60) + ':' + pad(f);
     }
 
@@ -656,6 +672,7 @@ kbd {
       startedAt: null,           // wall clock of the moment you called zero
       stoppedAt: null,
       offsetSec: 0,
+      startTcSec: 0,             // what timecode the session's zero maps to
       leadSec: -3,               // you always notice it late
       notes: []
     };
@@ -703,6 +720,19 @@ kbd {
 
   /** Capture order, oldest first. Returns a fresh array, so callers that want
    *  newest-first display order may reverse it without affecting exports. */
+  /* Seconds from the session's zero, expressed on the camera's clock. Zero
+   * unless a start timecode is set, which is what makes time-of-day jammed
+   * cameras line up without any further arithmetic. */
+  function absSec(s, sec) { return (s.startTcSec || 0) + sec; }
+
+  /** Seconds since local (or UTC) midnight at a given instant. */
+  function timeOfDaySec(ms, utc) {
+    var d = new Date(ms);
+    return utc
+      ? d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds() + d.getUTCMilliseconds() / 1000
+      : d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000;
+  }
+
   function sortedNotes(s) {
     return s.notes.slice().sort(function (a, b) { return a.keyDownAt - b.keyDownAt; });
   }
@@ -735,7 +765,7 @@ kbd {
   ['sessionTitle', 'sessionPicker', 'newSession', 'clock', 'tc', 'transport',
    'composer', 'composerTag', 'composerInput', 'composerStamp', 'capturePrompt',
    'offset', 'offsetNum', 'lead', 'leadNum', 'noteList', 'emptyState',
-   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate']
+   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate', 'startTc', 'tcLocal', 'tcUtc', 'tcZero', 'deleteSession']
     .forEach(function (id) { el[id] = document.getElementById(id); });
 
   /* ----------------------------------------------------------- wake lock */
@@ -904,6 +934,10 @@ kbd {
     el.lead.value = el.leadNum.value = s.leadSec;
     el.sortMode.value = state.sortMode;
     el.rate.value = s.rateId;
+    if (document.activeElement !== el.startTc) {
+      el.startTc.value = toTimecode(s.startTcSec || 0, rateOf(s));
+    }
+    disarmDelete();
     el.transport.textContent = !s.startedAt ? 'Start' : (s.stoppedAt ? 'Resume' : 'Stop');
     el.transport.classList.toggle('stop', isRunning(s));
     renderPicker(s); renderSummary(s); renderNotes(s);
@@ -985,9 +1019,10 @@ kbd {
     var sec = noteSeconds(s, note);
     var tc = document.createElement(sec === null ? 'div' : 'button');
     tc.className = 'note-tc' + (sec === null ? ' muted' : ' editable');
-    tc.textContent = sec === null ? 'untimed' : toClock(sec);
+    tc.textContent = sec === null ? 'untimed' : toClock(absSec(s, sec));
     if (sec !== null) {
-      tc.title = toTimecode(sec, rateOf(s)) + ' @ ' + rateOf(s).label + ' — click to set an exact time';
+      tc.title = toTimecode(absSec(s, sec), rateOf(s)) + ' @ ' + rateOf(s).label +
+                 ' — click to set an exact time';
       tc.addEventListener('click', function () { editNoteTime(s, note, tc); });
     }
 
@@ -1035,7 +1070,7 @@ kbd {
   function editNoteTime(s, note, cell) {
     var input = document.createElement('input');
     input.className = 'note-tc-edit';
-    input.value = toClock(noteSeconds(s, note));
+    input.value = toClock(absSec(s, noteSeconds(s, note)));
     input.setAttribute('aria-label', 'Set this note\u2019s timecode');
     cell.replaceWith(input);
     input.focus();
@@ -1053,8 +1088,10 @@ kbd {
         render();
         return;
       }
-      retime(s, note, Math.max(0, target));
-      toast('Moved to ' + toClock(Math.max(0, target)));
+      // Typed as camera-clock time, stored relative to the session's zero.
+      var relative = Math.max(0, target - (s.startTcSec || 0));
+      retime(s, note, relative);
+      toast('Moved to ' + toClock(absSec(s, relative)));
     }
 
     input.addEventListener('keydown', function (e) {
@@ -1089,7 +1126,7 @@ kbd {
     lines.push('');
 
     markerNotes(s).forEach(function (row) {
-      var stamp = '- `' + toTimecode(row.sec, rateOf(s)) + '` **' + TAGS[row.note.tag].label + '**';
+      var stamp = '- `' + toTimecode(absSec(s, row.sec), rateOf(s)) + '` **' + TAGS[row.note.tag].label + '**';
       lines.push(row.note.text ? stamp + ' ' + row.note.text : stamp);
     });
 
@@ -1122,7 +1159,8 @@ kbd {
     o.push('    ' + rateBlock);
     o.push('    <timecode>');
     o.push('      ' + rateBlock);
-    o.push('      <string>' + framesToTimecode(0, rate) + '</string><frame>0</frame>' +
+    o.push('      <string>' + toTimecode(s.startTcSec || 0, rate) + '</string>' +
+           '<frame>' + toFrames(s.startTcSec || 0, rate) + '</frame>' +
            '<displayformat>' + (rate.df ? 'DF' : 'NDF') + '</displayformat>');
     o.push('    </timecode>');
     o.push('    <media><video><format><samplecharacteristics>');
@@ -1152,7 +1190,7 @@ kbd {
     var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
     var lines = [['Timecode', 'Seconds', 'Tag', 'Colour', 'Note', 'Wall clock'].map(cell).join(',')];
     markerNotes(s).forEach(function (r) {
-      lines.push([toTimecode(r.sec, rateOf(s)), r.sec.toFixed(2), TAGS[r.note.tag].label,
+      lines.push([toTimecode(absSec(s, r.sec), rateOf(s)), r.sec.toFixed(2), TAGS[r.note.tag].label,
                   TAGS[r.note.tag].color, r.note.text, r.note.wallClock].map(cell).join(','));
     });
     return lines.join('\n') + '\n';
@@ -1227,6 +1265,67 @@ kbd {
     opt.value = r.id;
     opt.textContent = r.label;
     el.rate.appendChild(opt);
+  });
+
+  function setStartTc(sec) {
+    var s = session();
+    s.startTcSec = Math.max(0, sec);
+    save();
+    render();
+  }
+
+  el.startTc.addEventListener('change', function () {
+    var parsed = parseTimecode(el.startTc.value);
+    if (parsed === null) {
+      toast('Could not read that timecode — try 14:32:07 or 14:32:07:12');
+      render();
+      return;
+    }
+    setStartTc(parsed);
+    toast('Start timecode ' + toTimecode(session().startTcSec, rateOf(session())));
+  });
+
+  /* Time-of-day buttons read the instant the session actually started, so
+   * pressing them after the fact still gives the right answer. */
+  function todFor(utc) {
+    var s = session();
+    setStartTc(timeOfDaySec(s.startedAt || Date.now(), utc));
+    toast((utc ? 'UTC' : 'Local') + ' time of day — ' +
+          toTimecode(session().startTcSec, rateOf(session())));
+  }
+  el.tcLocal.addEventListener('click', function () { todFor(false); });
+  el.tcUtc.addEventListener('click', function () { todFor(true); });
+  el.tcZero.addEventListener('click', function () { setStartTc(0); toast('Start timecode cleared'); });
+
+  /* Deleting is two clicks rather than a dialog: the button arms itself, and
+   * anything else disarms it. Losing a shoot's notes to a stray click is not
+   * a recoverable mistake. */
+  var deleteArmed = false;
+  function disarmDelete() {
+    deleteArmed = false;
+    el.deleteSession.classList.remove('armed');
+    el.deleteSession.textContent = 'Delete';
+  }
+  el.deleteSession.addEventListener('click', function (e) {
+    e.stopPropagation();
+    if (!deleteArmed) {
+      deleteArmed = true;
+      el.deleteSession.classList.add('armed');
+      el.deleteSession.textContent = 'Delete?';
+      return;
+    }
+    var s = session();
+    var name = s.title;
+    state.sessions = state.sessions.filter(function (item) { return item.id !== s.id; });
+    if (!state.sessions.length) state.sessions.push(newSession());
+    state.activeId = state.sessions[state.sessions.length - 1].id;
+    ui.filter = null;
+    save();
+    render();
+    toast('Deleted ' + name);
+  });
+  document.addEventListener('click', function (e) {
+    if (deleteArmed && e.target !== el.deleteSession) disarmDelete();
   });
 
   el.rate.addEventListener('change', function () {

@@ -69,7 +69,12 @@ It accepts `22:00`, `00:22:00`, `1:02:03` or plain seconds. The note keeps its
 place in the list so you can see the change took, and sorts into the right
 position in whatever you export.
 
-Under **Adjust timing** there are two session-wide corrections, both applied at
+**Start timecode** under Adjust timing maps the session's zero onto the camera's
+clock — set it by hand, or hit **Local** / **UTC** to snap it to the time of day
+the session started. The Premiere sequence start moves with it while the markers
+stay relative, which is how FCP7 XML expects it.
+
+Under **Adjust timing** there are two more session-wide corrections, both applied at
 export so they stay changeable:
 
 - **Start offset** shifts the whole session, for when you hit Start a few

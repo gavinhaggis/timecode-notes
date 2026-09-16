@@ -79,7 +79,8 @@ function framesToTimecode(totalFrames, rate) {
   const tb = rate.timebase;
   if (!rate.df) {
     const whole = Math.floor(totalFrames / tb);
-    return `${pad(Math.floor(whole / 3600))}:${pad(Math.floor(whole / 60) % 60)}` +
+    // Timecode is a clock: it wraps at 24h rather than running to 25:00:00.
+    return `${pad(Math.floor(whole / 3600) % 24)}:${pad(Math.floor(whole / 60) % 60)}` +
            `:${pad(whole % 60)}:${pad(totalFrames % tb)}`;
   }
 
@@ -143,6 +144,7 @@ function newSession(leadSec) {
     startedAt: null,
     stoppedAt: null,
     offsetSec: 0,
+    startTcSec: 0,             // what timecode the session's zero maps to
     leadSec: leadSec,
     notes: []
   };
@@ -157,6 +159,19 @@ function noteSeconds(session, note) {
 
 /** Capture order, oldest first. Returns a fresh array, so callers that want a
  *  different display order may reorder it without affecting exports. */
+/* Seconds from the session's zero, expressed on the camera's clock. Zero unless
+ * a start timecode is set, which is what makes time-of-day jammed cameras line
+ * up without any further arithmetic. */
+const absSec = (s, sec) => (s.startTcSec || 0) + sec;
+
+/** Seconds since local (or UTC) midnight at a given instant. */
+function timeOfDaySec(ms, utc) {
+  const d = new Date(ms);
+  return utc
+    ? d.getUTCHours() * 3600 + d.getUTCMinutes() * 60 + d.getUTCSeconds()
+    : d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds();
+}
+
 const sortedNotes = (s) => s.notes.slice().sort((a, b) => a.keyDownAt - b.keyDownAt);
 
 /** Display order only. Exports never consult this — see markerNotes.
@@ -207,7 +222,7 @@ function buildMarkdown(session, rate) {
   lines.push('');
 
   for (const row of markerNotes(session)) {
-    const stamp = `- \`${toTimecode(row.sec, rate)}\` **${TAGS[row.note.tag].label}**`;
+    const stamp = `- \`${toTimecode(absSec(session, row.sec), rate)}\` **${TAGS[row.note.tag].label}**`;
     lines.push(row.note.text ? `${stamp} ${row.note.text}` : stamp);
   }
 
@@ -239,7 +254,8 @@ function buildFcpXml(session, rate) {
     `    ${rateBlock}`,
     '    <timecode>',
     `      ${rate}`,
-    `      <string>${framesToTimecode(0, rate)}</string><frame>0</frame>` +
+    `      <string>${toTimecode(session.startTcSec || 0, rate)}</string>` +
+    `<frame>${toFrames(session.startTcSec || 0, rate)}</frame>` +
     `<displayformat>${rate.df ? 'DF' : 'NDF'}</displayformat>`,
     '    </timecode>',
     '    <media><video><format><samplecharacteristics>',
@@ -396,6 +412,7 @@ class TimecodeNotesView extends ItemView {
     /* --- timing --- */
     const timing = root.createEl('details', { cls: 'tcnotes-timing' });
     timing.createEl('summary', { text: 'Adjust timing' });
+    this.startTcRow(timing);
     this.offsetInput = this.numberRow(timing, 'Start offset', 'offsetSec');
     this.leadInput = this.numberRow(timing, 'Reaction lead', 'leadSec');
 
@@ -416,6 +433,42 @@ class TimecodeNotesView extends ItemView {
     });
 
     this.listEl = root.createDiv({ cls: 'tcnotes-list' });
+  }
+
+  /** Start timecode, with buttons to snap it to the time of day. */
+  startTcRow(parent) {
+    const row = parent.createDiv({ cls: 'tcnotes-numrow' });
+    row.createSpan({ text: 'Start TC' });
+
+    const input = row.createEl('input', { type: 'text', cls: 'tcnotes-starttc' });
+    this.startTcInput = input;
+    this.registerDomEvent(input, 'change', () => {
+      const parsed = parseTimecode(input.value, rateById(this.plugin.settings.rateId));
+      if (parsed === null) {
+        new Notice('Could not read that timecode — try 14:32:07 or 14:32:07:12');
+        this.render();
+        return;
+      }
+      this.setStartTc(parsed);
+    });
+
+    const tod = (utc) => {
+      const s = this.session;
+      this.setStartTc(timeOfDaySec(s.startedAt || Date.now(), utc));
+    };
+    const local = row.createEl('button', { text: 'Local' });
+    this.registerDomEvent(local, 'click', () => tod(false));
+    const utcBtn = row.createEl('button', { text: 'UTC' });
+    this.registerDomEvent(utcBtn, 'click', () => tod(true));
+    const zero = row.createEl('button', { text: 'Zero' });
+    this.registerDomEvent(zero, 'click', () => this.setStartTc(0));
+  }
+
+  setStartTc(sec) {
+    this.session.startTcSec = Math.max(0, sec);
+    this.plugin.persist();
+    this.render();
+    new Notice(`Start timecode ${toTimecode(this.session.startTcSec, rateById(this.plugin.settings.rateId))}`);
   }
 
   numberRow(parent, label, key) {
@@ -534,7 +587,7 @@ class TimecodeNotesView extends ItemView {
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'tcnotes-tcedit';
-    input.value = toClock(noteSeconds(this.session, note));
+    input.value = toClock(absSec(this.session, noteSeconds(this.session, note)));
     cell.replaceWith(input);
     input.focus();
     input.select();
@@ -551,8 +604,10 @@ class TimecodeNotesView extends ItemView {
         this.render();
         return;
       }
-      this.retime(note, Math.max(0, target));
-      new Notice(`Moved to ${toClock(Math.max(0, target))}`);
+      // Typed as camera-clock time, stored relative to the session's zero.
+      const relative = Math.max(0, target - (this.session.startTcSec || 0));
+      this.retime(note, relative);
+      new Notice(`Moved to ${toClock(absSec(this.session, relative))}`);
     };
 
     input.addEventListener('keydown', (evt) => {
@@ -569,6 +624,9 @@ class TimecodeNotesView extends ItemView {
     const s = this.session;
     this.titleInput.value = s.title;
     this.offsetInput.value = s.offsetSec;
+    if (this.startTcInput && document.activeElement !== this.startTcInput) {
+      this.startTcInput.value = toTimecode(s.startTcSec || 0, rateById(this.plugin.settings.rateId));
+    }
     this.leadInput.value = s.leadSec;
     this.transportBtn.setText(!s.startedAt ? 'Start' : (s.stoppedAt ? 'Resume' : 'Stop'));
     this.transportBtn.toggleClass('tcnotes-rolling', !!s.startedAt && !s.stoppedAt);
@@ -627,7 +685,7 @@ class TimecodeNotesView extends ItemView {
 
       const tc = row.createSpan({
         cls: 'tcnotes-rowtc' + (sec === null ? ' tcnotes-muted' : ' tcnotes-editable'),
-        text: sec === null ? 'untimed' : toClock(sec)
+        text: sec === null ? 'untimed' : toClock(absSec(s, sec))
       });
       if (sec !== null) {
         tc.setAttribute('aria-label', 'Click to set an exact time');

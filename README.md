@@ -70,6 +70,33 @@ The NTSC rates are handled properly: seconds convert to frames at the true
 skipping two labels a minute at 30, four at 60, except on every tenth minute.
 Drop-frame is shown with a semicolon (`01:00:00;00`).
 
+## Start timecode
+
+By default a session starts at `00:00:00:00`. Set a **start timecode** under
+Adjust timing and every note moves onto the camera's clock — which is what you
+want when the cameras are jammed to time of day.
+
+The **Local** and **UTC** buttons read the instant the session actually started,
+so pressing them after the fact still gives the right answer. **Zero** clears it.
+
+What this does and does not shift:
+
+- the on-screen list, the markdown and the CSV move onto the camera clock
+- the Premiere sequence's start timecode is set, while the markers themselves
+  stay relative to the sequence, which is how FCP7 XML expects it
+- YouTube chapters stay relative to the start of the video, because that is what
+  YouTube needs
+
+## Managing sessions
+
+**New** starts a fresh session; the picker switches between them. **Delete**
+removes the current one and takes two clicks — the button arms itself first, and
+clicking anywhere else disarms it. Deleting the last session leaves you with a
+fresh empty one rather than nothing.
+
+Sessions live in your browser only, so export anything worth keeping before you
+delete it.
+
 ## Two timing corrections
 
 Both are applied at export, so they stay adjustable after the fact.
