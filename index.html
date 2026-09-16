@@ -705,7 +705,7 @@ kbd {
       stoppedAt: null,
       offsetSec: 0,
       startTcSec: 0,             // what timecode the session's zero maps to
-      tcMode: 'manual',          // 'manual' | 'local' | 'utc'
+      tcMode: state && state.lastTcMode ? state.lastTcMode : 'manual',
       leadSec: -3,               // you always notice it late
       notes: []
     };
@@ -729,6 +729,7 @@ kbd {
   if (!state.activeId) state.activeId = state.sessions[0].id;
   if (!state.sortMode) state.sortMode = 'capture-desc';
   if (!state.lastRateId) state.lastRateId = DEFAULT_RATE;
+  if (!state.lastTcMode) state.lastTcMode = 'manual';
 
   var ui = { composerOpen: false, draftTag: DEFAULT_TAG, draftExplicit: false, draftKeyDownAt: 0, filter: null };
 
@@ -1393,6 +1394,7 @@ kbd {
   function setStartTc(sec) {
     var s = session();
     s.tcMode = 'manual';
+    state.lastTcMode = 'manual';
     s.startTcSec = Math.max(0, sec);
     save();
     render();
@@ -1405,10 +1407,12 @@ kbd {
     if (s.tcMode === mode) {
       var frozen = startTcOf(s);
       s.tcMode = 'manual';
+      state.lastTcMode = 'manual';
       s.startTcSec = frozen;
       toast('Following off — held at ' + toTimecode(frozen, rateOf(s)));
     } else {
       s.tcMode = mode;
+      state.lastTcMode = mode;
       toast(mode === 'utc' ? 'Following UTC time of day' : 'Following local time of day');
     }
     save();

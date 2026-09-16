@@ -72,7 +72,8 @@ const DEFAULT_SETTINGS = {
   rateId: DEFAULT_RATE,
   leadSec: -3,
   exportFolder: '',
-  sortMode: 'capture-desc'
+  sortMode: 'capture-desc',
+  tcMode: 'manual'
 };
 
 const SORT_MODES = {
@@ -154,7 +155,7 @@ function dateStamp(ms) {
 
 /* ----------------------------------------------------------------- session */
 
-function newSession(leadSec) {
+function newSession(leadSec, tcMode) {
   return {
     title: dateStamp(),        // the producer renames it afterwards
     createdAt: Date.now(),
@@ -162,7 +163,7 @@ function newSession(leadSec) {
     stoppedAt: null,
     offsetSec: 0,
     startTcSec: 0,             // what timecode the session's zero maps to
-    tcMode: 'manual',          // 'manual' | 'local' | 'utc'
+    tcMode,                    // 'manual' | 'local' | 'utc', carried between sessions
     leadSec: leadSec,
     notes: []
   };
@@ -496,10 +497,12 @@ class TimecodeNotesView extends ItemView {
     if (s.tcMode === mode) {
       const frozen = startTcOf(s);
       s.tcMode = 'manual';
+      this.plugin.settings.tcMode = 'manual';
       s.startTcSec = frozen;
       new Notice(`Following off — held at ${toTimecode(frozen, rateById(this.plugin.settings.rateId))}`);
     } else {
       s.tcMode = mode;
+      this.plugin.settings.tcMode = mode;
       new Notice(mode === 'utc' ? 'Following UTC time of day' : 'Following local time of day');
     }
     this.plugin.persist();
@@ -508,6 +511,7 @@ class TimecodeNotesView extends ItemView {
 
   setStartTc(sec) {
     this.session.tcMode = 'manual';
+    this.plugin.settings.tcMode = 'manual';
     this.session.startTcSec = Math.max(0, sec);
     this.plugin.persist();
     this.render();
@@ -805,7 +809,7 @@ module.exports = class TimecodeNotesPlugin extends Plugin {
     await this.loadSettings();
 
     const saved = await this.loadData();
-    this.session = migrateTags((saved && saved.session) ? saved.session : newSession(this.settings.leadSec));
+    this.session = migrateTags((saved && saved.session) ? saved.session : newSession(this.settings.leadSec, this.settings.tcMode));
 
     this.registerView(VIEW_TYPE, (leaf) => new TimecodeNotesView(leaf, this));
 
@@ -944,7 +948,7 @@ module.exports = class TimecodeNotesPlugin extends Plugin {
   }
 
   async startNewSession() {
-    this.session = newSession(this.settings.leadSec);
+    this.session = newSession(this.settings.leadSec, this.settings.tcMode);
     await this.persist();
     this.refreshViews();
     new Notice(`New session — ${this.session.title}`);

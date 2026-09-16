@@ -92,5 +92,16 @@ console.log('\nfollow-the-clock mode is derived, not snapshotted:');
   check('manual ignores the start instant', F.startTcOf(f) === 10*3600, String(F.startTcOf(f)));
 }
 
+console.log('\nfollow setting carries to a new session:');
+{
+  // A studio that always jams to time of day should not re-arm every session.
+  const carried = F.newSession(-3, 'local');
+  check('new session born following', carried.tcMode === 'local', carried.tcMode);
+  const plain = F.newSession(-3, 'manual');
+  check('new session born manual when that is the setting', plain.tcMode === 'manual', plain.tcMode);
+  const none = F.newSession(-3);
+  check('missing setting does not break it', none.tcMode === undefined || none.tcMode === 'manual', String(none.tcMode));
+}
+
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail?1:0);
