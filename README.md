@@ -39,6 +39,12 @@ discards it.
 | `1`–`6` | instant tagged marker, nothing to type |
 | `*` `!` `~` `?` `#` | first character of a note sets its tag |
 
+**On a phone or tablet** there is no keystroke to start a note, so every tag is
+also a button: tap one and it stamps the time, opens the note and raises the
+keyboard. Type and hit **Add**, or add nothing and you have a bare marker. The
+**+ Note** button does the same without choosing a tag. Tapping a different tag
+while something is half-typed files that note rather than discarding it.
+
 The six tags map to what an editor actually does next: **Good**, **No good**,
 **Sound**, **B-roll**, **Question**, and **Note** (a production note, which never
 becomes a marker).

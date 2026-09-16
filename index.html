@@ -190,21 +190,41 @@ section + section { margin-top: var(--sp-5); }
   color: var(--dim); font-size: .8rem; font-weight: 500;
 }
 .composer {
-  display: flex; align-items: center; gap: var(--sp-3);
+  display: flex; align-items: center; gap: var(--sp-3); flex-wrap: wrap;
   background: var(--surface); border: 2px solid var(--gold);
   border-radius: var(--r); padding: var(--sp-3) var(--sp-4);
   box-shadow: 0 0 0 3px var(--gold-tint);
 }
 .composer-input {
-  flex: 1; background: transparent; border: none; color: var(--text);
+  flex: 1 1 140px; min-width: 0; background: transparent; border: none; color: var(--text);
   font-size: 1rem; font-weight: 500;
 }
+.composer-input::placeholder { color: var(--dim); }
 .composer-input:focus { outline: none; }
 .composer-stamp {
   font-family: var(--mono); font-size: .7rem; font-weight: 600;
   color: var(--gold); font-variant-numeric: tabular-nums;
+  margin-left: auto; flex: none;
 }
 .hidden { display: none !important; }
+
+/* Touch has no keydown to open the composer, so every tag is also a way to
+   start a note: the tap is the timestamp. */
+.tagbtns { display: flex; flex-wrap: wrap; gap: var(--sp-2); margin-top: var(--sp-3); }
+.tagbtn {
+  display: inline-flex; align-items: center; gap: 7px;
+  background: var(--surface); color: var(--muted);
+  border: 1px solid var(--border); border-radius: var(--r-pill);
+  padding: 9px 14px; font-size: .72rem; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: all var(--t-fast);
+  min-height: 40px;                     /* comfortable touch target */
+}
+.tagbtn:hover { border-color: var(--border-lit); color: var(--text); }
+.tagbtn:active { transform: scale(.97); }
+.tagbtn.plain { color: var(--gold); border-color: var(--gold); }
+
+.btn.add { background: var(--gold); border-color: var(--gold); color: var(--ink); font-weight: 800; }
+.btn.add:hover { background: var(--gold-bright); border-color: var(--gold-bright); }
 
 /* ── Summary ──────────────────────────────────────────────────────────── */
 
@@ -422,12 +442,16 @@ kbd {
   <section class="capture">
     <div id="composer" class="composer hidden">
       <span id="composerTag" class="chip">Note</span>
-      <input id="composerInput" class="composer-input" autocomplete="off" spellcheck="true">
+      <input id="composerInput" class="composer-input" autocomplete="off" spellcheck="true"
+             autocapitalize="sentences" enterkeyhint="done" placeholder="…and what about it?">
       <span class="composer-stamp" id="composerStamp"></span>
+      <button id="composerAdd" class="btn tiny add" title="File this note (Enter)">Add</button>
+      <button id="composerDrop" class="btn ghost tiny" title="Discard (Esc)">×</button>
     </div>
     <div id="capturePrompt" class="prompt">
-      Just start typing. The first keystroke is the timestamp.
+      Just start typing — the first keystroke is the timestamp. Or tap a tag below.
     </div>
+    <div id="tagButtons" class="tagbtns"></div>
   </section>
 
   <div class="section-label">Session</div>
@@ -503,6 +527,7 @@ kbd {
       <div><kbd>Enter</kbd><span>Commit — or open an empty note</span></div>
       <div><kbd>Esc</kbd><span>Discard the note in progress</span></div>
       <div><kbd>click a timecode</kbd><span>Type an exact time — <code>22:00</code> or <code>00:22:00</code></span></div>
+      <div><kbd>tap a tag</kbd><span>Stamps the time and starts a note — for touch, where there is no keystroke</span></div>
     </div>
 
     <div class="cheat-sub">Instant markers — one key, nothing to type</div>
@@ -765,7 +790,7 @@ kbd {
   ['sessionTitle', 'sessionPicker', 'newSession', 'clock', 'tc', 'transport',
    'composer', 'composerTag', 'composerInput', 'composerStamp', 'capturePrompt',
    'offset', 'offsetNum', 'lead', 'leadNum', 'noteList', 'emptyState',
-   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate', 'startTc', 'tcLocal', 'tcUtc', 'tcZero', 'deleteSession']
+   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate', 'startTc', 'tcLocal', 'tcUtc', 'tcZero', 'deleteSession', 'tagButtons', 'composerAdd', 'composerDrop']
     .forEach(function (id) { el[id] = document.getElementById(id); });
 
   /* ----------------------------------------------------------- wake lock */
@@ -846,6 +871,19 @@ kbd {
     var sec = s.startedAt ? (ui.draftKeyDownAt - s.startedAt) / 1000 + s.offsetSec + s.leadSec : null;
     el.composerStamp.textContent = sec === null ? 'no timecode' : toTimecode(sec);
     paintChip(el.composerTag, ui.draftTag);
+  }
+
+  /* Opening from a tap. The focus() must stay inside the click handler's call
+   * stack or mobile browsers refuse to raise the keyboard. */
+  function startNote(tag, stampedAt) {
+    // A tap while something is half-typed files that note rather than
+    // silently throwing its text away.
+    if (ui.composerOpen) commitComposer();
+    openComposer('', stampedAt);
+    if (tag && tag !== 'plain') {
+      ui.draftTag = tag;
+      paintChip(el.composerTag, tag);
+    }
   }
 
   function closeComposer() {
@@ -1258,6 +1296,45 @@ kbd {
     toastTimer = setTimeout(function () { el.toast.classList.remove('show'); }, 1600);
   }
 
+  /* One button per tag, plus a plain one. Each stamps the moment it is tapped
+   * and opens the composer, so a note with text and a bare marker are the same
+   * gesture: tap, then type or don't. */
+  function buildTagButtons() {
+    el.tagButtons.innerHTML = '';
+
+    var plain = document.createElement('button');
+    plain.className = 'tagbtn plain';
+    plain.textContent = '+ Note';
+    plain.title = 'Start a note now';
+    plain.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    plain.addEventListener('click', function () { startNote('plain', Date.now()); });
+    el.tagButtons.appendChild(plain);
+
+    TAG_ORDER.forEach(function (tag) {
+      if (tag === 'plain') return;
+      var b = document.createElement('button');
+      b.className = 'tagbtn';
+      b.title = TAGS[tag].label + ' — key ' + TAGS[tag].num;
+
+      var dot = document.createElement('span');
+      dot.className = 'dot';
+      dot.style.background = 'var(' + TAGS[tag].css + ')';
+      b.appendChild(dot);
+      b.appendChild(document.createTextNode(TAGS[tag].label));
+
+      // Keep focus off the button so the composer can take it on click.
+      b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+      b.addEventListener('click', function () { startNote(tag, Date.now()); });
+      el.tagButtons.appendChild(b);
+    });
+  }
+  buildTagButtons();
+
+  el.composerAdd.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  el.composerAdd.addEventListener('click', function () { commitComposer(); });
+  el.composerDrop.addEventListener('mousedown', function (e) { e.preventDefault(); });
+  el.composerDrop.addEventListener('click', function () { closeComposer(); });
+
   el.transport.addEventListener('click', toggleTransport);
 
   RATES.forEach(function (r) {
@@ -1378,7 +1455,9 @@ kbd {
 
   // Clicking away from an open composer should keep the note, not lose it.
   document.addEventListener('mousedown', function (e) {
-    if (ui.composerOpen && !el.composer.contains(e.target)) commitComposer();
+    if (!ui.composerOpen) return;
+    if (el.composer.contains(e.target) || el.tagButtons.contains(e.target)) return;
+    commitComposer();
   });
 
   render();
