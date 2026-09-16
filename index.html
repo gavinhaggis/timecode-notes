@@ -782,7 +782,38 @@ kbd {
     return s.startTcSec || 0;
   }
 
-  function absSec(s, sec) { return startTcOf(s) + sec; }
+  /* Timecode arithmetic has to happen in FRAMES, not seconds.
+   *
+   * A start timecode is a LABEL on the camera's clock, and labels count at the
+   * nominal timebase. Elapsed session time is REAL seconds, which convert at
+   * the true rate. Those are the same thing only when fps === timebase; at
+   * 29.97 non-drop, adding real seconds to a label drifts by 0.1% — about two
+   * seconds an hour, and about 34 seconds when converting a time of day. So
+   * everything absolute is computed by adding frame counts. */
+
+  /** A label (seconds since midnight as the camera reads it) to a frame count. */
+  function labelSecToFrames(labelSec, rate) {
+    if (!isFinite(labelSec) || labelSec < 0) labelSec = 0;
+    var naive = Math.round(labelSec * rate.timebase);
+    if (!rate.df) return naive;
+
+    // Drop-frame labels skip numbers, so the count is lower than the label
+    // implies: two a minute at 30, four at 60, except every tenth minute.
+    var drop = rate.timebase / 30 * 2;
+    var minutes = Math.floor(labelSec / 60);
+    return naive - drop * (minutes - Math.floor(minutes / 10));
+  }
+
+  /** The frame count the session's zero sits at on the camera's clock. */
+  function startTcFrames(s, rate) { return labelSecToFrames(startTcOf(s), rate); }
+
+  /** Where a note lands on the camera's clock, in frames. */
+  function noteFrames(s, sec, rate) { return startTcFrames(s, rate) + toFrames(sec, rate); }
+
+  /** HH:MM:SS of a frame count, on the label clock. */
+  function framesToClock(frames, rate) {
+    return framesToTimecode(frames, rate).slice(0, 8).replace(';', ':');
+  }
 
   /** Seconds since local (or UTC) midnight at a given instant. */
   function timeOfDaySec(ms, utc) {
@@ -879,17 +910,32 @@ kbd {
 
   function tickClock() {
     var s = session(), e = elapsed(s);
-    el.clock.textContent = toClock(e);
+    /* With a start timecode set, the big readout is the camera's clock — the
+     * number you would read off the camera — and elapsed moves to the line
+     * underneath. Without one they are the same thing, so nothing changes. */
+    var rate = rateOf(s);
+    var onCameraClock = startTcOf(s) > 0;
+    if (onCameraClock) {
+      var nowFrames = startTcFrames(s, rate) + toFrames(e, rate);
+      el.clock.textContent = framesToClock(nowFrames, rate);
+      el.tc.textContent = framesToTimecode(nowFrames, rate) + '  ·  ' + toClock(e) + ' elapsed';
+    } else {
+      el.clock.textContent = toClock(e);
+      el.tc.textContent = toTimecode(e, rate);
+    }
     el.clock.classList.toggle('running', isRunning(s));
-    el.tc.textContent = toTimecode(e, rateOf(s));
     el.statDuration.textContent = toClock(e);
 
     if (!s.startedAt && (s.tcMode === 'local' || s.tcMode === 'utc') &&
         document.activeElement !== el.startTc) {
-      el.startTc.value = toTimecode(startTcOf(s), rateOf(s));
+      el.startTc.value = framesToTimecode(startTcFrames(s, rateOf(s)), rateOf(s));
     }
-    requestAnimationFrame(tickClock);
   }
+
+  /* A plain interval rather than requestAnimationFrame: rAF is throttled to a
+   * stop while the page is hidden, which freezes the readout the moment the
+   * operator switches apps. Four times a second is ample for whole frames. */
+  function startClock() { tickClock(); setInterval(tickClock, 250); }
 
   /* ------------------------------------------------------------ composer */
 
@@ -1014,7 +1060,7 @@ kbd {
     el.rate.value = s.rateId;
     var following = s.tcMode === 'local' || s.tcMode === 'utc';
     if (document.activeElement !== el.startTc) {
-      el.startTc.value = toTimecode(startTcOf(s), rateOf(s));
+      el.startTc.value = framesToTimecode(startTcFrames(s, rateOf(s)), rateOf(s));
     }
     el.startTc.classList.toggle('following', following);
     el.tcLocal.classList.toggle('on', s.tcMode === 'local');
@@ -1104,9 +1150,9 @@ kbd {
     var sec = noteSeconds(s, note);
     var tc = document.createElement(sec === null ? 'div' : 'button');
     tc.className = 'note-tc' + (sec === null ? ' muted' : ' editable');
-    tc.textContent = sec === null ? 'untimed' : toClock(absSec(s, sec));
+    tc.textContent = sec === null ? 'untimed' : framesToClock(noteFrames(s, sec, rateOf(s)), rateOf(s));
     if (sec !== null) {
-      tc.title = toTimecode(absSec(s, sec), rateOf(s)) + ' @ ' + rateOf(s).label +
+      tc.title = framesToTimecode(noteFrames(s, sec, rateOf(s)), rateOf(s)) + ' @ ' + rateOf(s).label +
                  ' — click to set an exact time';
       tc.addEventListener('click', function () { editNoteTime(s, note, tc); });
     }
@@ -1155,7 +1201,7 @@ kbd {
   function editNoteTime(s, note, cell) {
     var input = document.createElement('input');
     input.className = 'note-tc-edit';
-    input.value = toClock(absSec(s, noteSeconds(s, note)));
+    input.value = framesToClock(noteFrames(s, noteSeconds(s, note), rateOf(s)), rateOf(s));
     input.setAttribute('aria-label', 'Set this note\u2019s timecode');
     cell.replaceWith(input);
     input.focus();
@@ -1173,10 +1219,13 @@ kbd {
         render();
         return;
       }
-      // Typed as camera-clock time, stored relative to the session's zero.
-      var relative = Math.max(0, target - startTcOf(s));
+      // Typed as a camera-clock LABEL. Convert both ends to frames before
+      // subtracting, or the difference is wrong at the NTSC rates.
+      var rate = rateOf(s);
+      var deltaFrames = labelSecToFrames(target, rate) - startTcFrames(s, rate);
+      var relative = Math.max(0, deltaFrames / rate.fps);
       retime(s, note, relative);
-      toast('Moved to ' + toClock(absSec(s, relative)));
+      toast('Moved to ' + framesToClock(noteFrames(s, relative, rateOf(s)), rateOf(s)));
     }
 
     input.addEventListener('keydown', function (e) {
@@ -1211,7 +1260,7 @@ kbd {
     lines.push('');
 
     markerNotes(s).forEach(function (row) {
-      var stamp = '- `' + toTimecode(absSec(s, row.sec), rateOf(s)) + '` **' + TAGS[row.note.tag].label + '**';
+      var stamp = '- `' + framesToTimecode(noteFrames(s, row.sec, rateOf(s)), rateOf(s)) + '` **' + TAGS[row.note.tag].label + '**';
       lines.push(row.note.text ? stamp + ' ' + row.note.text : stamp);
     });
 
@@ -1244,8 +1293,8 @@ kbd {
     o.push('    ' + rateBlock);
     o.push('    <timecode>');
     o.push('      ' + rateBlock);
-    o.push('      <string>' + toTimecode(startTcOf(s), rate) + '</string>' +
-           '<frame>' + toFrames(startTcOf(s), rate) + '</frame>' +
+    o.push('      <string>' + framesToTimecode(startTcFrames(s, rate), rate) + '</string>' +
+           '<frame>' + startTcFrames(s, rate) + '</frame>' +
            '<displayformat>' + (rate.df ? 'DF' : 'NDF') + '</displayformat>');
     o.push('    </timecode>');
     o.push('    <media><video><format><samplecharacteristics>');
@@ -1275,7 +1324,7 @@ kbd {
     var cell = function (v) { return '"' + String(v == null ? '' : v).replace(/"/g, '""') + '"'; };
     var lines = [['Timecode', 'Seconds', 'Tag', 'Colour', 'Note', 'Wall clock'].map(cell).join(',')];
     markerNotes(s).forEach(function (r) {
-      lines.push([toTimecode(absSec(s, r.sec), rateOf(s)), r.sec.toFixed(2), TAGS[r.note.tag].label,
+      lines.push([framesToTimecode(noteFrames(s, r.sec, rateOf(s)), rateOf(s)), r.sec.toFixed(2), TAGS[r.note.tag].label,
                   TAGS[r.note.tag].color, r.note.text, r.note.wallClock].map(cell).join(','));
     });
     return lines.join('\n') + '\n';
@@ -1409,7 +1458,7 @@ kbd {
       s.tcMode = 'manual';
       state.lastTcMode = 'manual';
       s.startTcSec = frozen;
-      toast('Following off — held at ' + toTimecode(frozen, rateOf(s)));
+      toast('Following off — held at ' + framesToTimecode(labelSecToFrames(frozen, rateOf(s)), rateOf(s)));
     } else {
       s.tcMode = mode;
       state.lastTcMode = mode;
@@ -1427,7 +1476,7 @@ kbd {
       return;
     }
     setStartTc(parsed);
-    toast('Start timecode ' + toTimecode(startTcOf(session()), rateOf(session())));
+    toast('Start timecode ' + framesToTimecode(startTcFrames(session(), rateOf(session())), rateOf(session())));
   });
 
   /* Time-of-day buttons read the instant the session actually started, so
@@ -1523,7 +1572,7 @@ kbd {
   });
 
   render();
-  tickClock();
+  startClock();
   syncWakeLock();
 })();
 </script>

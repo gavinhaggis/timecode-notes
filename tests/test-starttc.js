@@ -13,7 +13,7 @@ const src = fs.readFileSync(require('path').join(__dirname, '..', 'obsidian', 't
 const body = src.replace(/^'use strict';/m,'').replace(/const \{ Plugin[^;]+;/,'')
   .replace(/module\.exports = class[\s\S]*$/,'');
 const F = new Function('require','ItemView','PluginSettingTab',
-  body + '\nreturn { absSec, timeOfDaySec, toTimecode, toFrames, framesToTimecode, rateById, newSession, buildMarkdown, buildFcpXml, markerNotes, startTcOf };'
+  body + '\nreturn { timeOfDaySec, toTimecode, toFrames, framesToTimecode, rateById, newSession, buildMarkdown, buildFcpXml, markerNotes, startTcOf, labelSecToFrames, startTcFrames, noteFrames, framesToClock };'
 )(require, Base, Base);
 const R = (id) => F.rateById(id);
 
@@ -37,7 +37,9 @@ s.startedAt = 1000;
 s.startTcSec = 14*3600 + 32*60 + 7;     // 14:32:07
 s.notes.push({ id:'a', wallClock:'', keyDownAt: 1000 + 63000, committedAt:0, tag:'good', text:'x', nudgeSec:0 });
 
-check('absSec offsets by the start TC', F.absSec(s, 60) === s.startTcSec + 60);
+check('noteFrames = start frames + elapsed frames',
+      F.noteFrames(s, 60, R('25')) === F.startTcFrames(s, R('25')) + 25 * 60,
+      String(F.noteFrames(s, 60, R('25'))));
 
 const rate = R('25');
 const md = F.buildMarkdown(s, rate);

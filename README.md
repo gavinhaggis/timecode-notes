@@ -96,6 +96,22 @@ Turning a toggle off holds whatever it currently reads, so dropping out of follo
 never moves notes you already have. Typing in the field, or pressing **Zero**,
 also drops out of follow.
 
+With a start timecode in play the **running clock shows the camera's time**
+rather than elapsed, and elapsed moves to the line underneath — so the number on
+screen is the number you would read off the camera.
+
+### How it converts
+
+Timecode arithmetic happens in frames, never in seconds. A start timecode is a
+*label* on the camera's clock and labels count at the nominal timebase; elapsed
+session time is *real* seconds and converts at the true rate. Those are the same
+thing only when the two match. At 29.97 non-drop they do not, and adding seconds
+to a label drifts by 0.1% — about 36 seconds when converting a time of day.
+
+So a marker's position is `start-timecode-in-frames + elapsed-seconds-in-frames`,
+and only then rendered as a label. Drop-frame is renumbered on the way out, and
+the inverse is used on the way back in when you type a time.
+
 What this does and does not shift:
 
 - the on-screen list, the markdown and the CSV move onto the camera clock
