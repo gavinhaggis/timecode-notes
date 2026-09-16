@@ -38,8 +38,8 @@ s.startedAt = 1000000;
 const mk = (tag, text, off) => s.notes.push({
   id:'n'+off, wallClock:'', keyDownAt: s.startedAt + off*1000, committedAt:0, tag, text, nudgeSec:0 });
 mk('good','early',60);
-mk('ng','middle',600);
-mk('question','realised late, belongs at 22 min',1847);
+mk('bad','middle',600);
+mk('note','realised late, belongs at 22 min',1847);
 
 // Reproduce what the view's retime() does to the last note.
 const note = s.notes[2];

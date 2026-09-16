@@ -25,19 +25,17 @@ just type — the first character is the timestamp, and `Enter` files the note.
 |---|---|
 | `Enter` | File the note |
 | `Esc` | Discard the note in progress |
-| `1` on an empty field | **Good** — the take to use |
-| `2` on an empty field | **No good** — don't use this one |
-| `3` on an empty field | **Sound** — audio problem to fix |
-| `4` on an empty field | **B-roll** — cutaway opportunity |
-| `5` on an empty field | **Question** — flag it for the edit |
-| `6` on an empty field | **Note** — production note, never a marker |
-| `*` as first character | Good take |
-| `!` as first character | No good |
-| `~` as first character | B-roll |
-| `?` as first character | Question for the edit |
-| `#` as first character | Production note — never becomes a marker |
+| `1` on an empty field | **Note** — anything worth a timecode |
+| `2` on an empty field | **Good** — the take to use |
+| `3` on an empty field | **Bad** — don't use this one |
+| `4` on an empty field | **Audio** — sound problem to fix |
+| `5` on an empty field | **Visual** — anything you can see |
+| `*` as first character | Good |
+| `!` as first character | Bad |
+| `@` as first character | Audio |
+| `~` as first character | Visual |
 
-Sound has no shortcut character — use `3`, or click its tag button. The digits
+Note has no shortcut character because it is the default — just type. The digits
 only fire while the capture field is empty, so a note that genuinely starts with
 a number still types normally once you have begun.
 
@@ -97,8 +95,8 @@ export so they stay changeable:
 
 - One session is live at a time. **New session** starts a fresh one; the old one
   is gone, so insert it into a note first. In Obsidian the vault is the archive.
-- Notes taken before you press Start become production notes, since there is
-  nothing to anchor them to.
+- Notes taken before you press Start stay untimed and never become markers,
+  since there is nothing to anchor them to.
 - XML export never overwrites — it walks to the next free filename.
 - Every note also stores absolute wall-clock time, so multicam and per-clip
   anchoring can be added later without invalidating sessions you have already

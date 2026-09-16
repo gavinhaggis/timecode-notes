@@ -55,12 +55,12 @@ const mk = (tag, text, off) => s.notes.push({
   id: 'n' + off, wallClock: new Date(s.startedAt + off * 1000).toISOString(),
   keyDownAt: s.startedAt + off * 1000, committedAt: 0, tag, text, nudgeSec: 0
 });
-mk('plain', 'good energy, use this one', 10);
+mk('note', 'good energy, use this one', 10);
 mk('good', '', 65);
 mk('good', 'lovely wide here', 200);
-mk('ng', 'boom in shot', 600);
-mk('prod', 'relight back wall tomorrow', 700);
-mk('question', 'does this cut with the interview', 3725.4);
+mk('bad', 'boom in shot', 600);
+mk('note', 'relight back wall tomorrow', 700);
+mk('note', 'does this cut with the interview', 3725.4);
 
 console.log('\nmarkers:', F.markerNotes(s).length, '(expect 5 — prod excluded)');
 console.log('\n--- markdown ---\n' + F.buildMarkdown(s, R('25')));

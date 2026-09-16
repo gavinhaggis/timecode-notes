@@ -13,15 +13,32 @@ const VIEW_TYPE = 'timecode-notes-view';
 /* -------------------------------------------------------------------- tags */
 
 const TAGS = {
-  good:     { num: '1', sigil: '*',  label: 'Good',     color: 'Green' },
-  ng:       { num: '2', sigil: '!',  label: 'No good',  color: 'Red' },
-  sound:    { num: '3', sigil: null, label: 'Sound',    color: 'Yellow' },
-  broll:    { num: '4', sigil: '~',  label: 'B-roll',   color: 'Cyan' },
-  question: { num: '5', sigil: '?',  label: 'Question', color: 'Purple' },
-  prod:     { num: '6', sigil: '#',  label: 'Note',     color: 'Blue' },
-  plain:    { num: null, sigil: null, label: 'Mark',    color: 'Blue' }
+  note:   { num: '1', sigil: null, label: 'Note',   color: 'Blue' },
+  good:   { num: '2', sigil: '*',  label: 'Good',   color: 'Green' },
+  bad:    { num: '3', sigil: '!',  label: 'Bad',    color: 'Red' },
+  audio:  { num: '4', sigil: '@',  label: 'Audio',  color: 'Yellow' },
+  visual: { num: '5', sigil: '~',  label: 'Visual', color: 'Cyan' }
 };
-const TAG_ORDER = ['good', 'ng', 'sound', 'broll', 'question', 'prod', 'plain'];
+const TAG_ORDER = ['note', 'good', 'bad', 'audio', 'visual'];
+const DEFAULT_TAG = 'note';
+
+/* Tags from before the set was simplified. Old sessions keep working, and
+ * production notes keep their untimed nature — which now belongs to the note
+ * rather than to a special tag. */
+const TAG_MIGRATION = {
+  ng: 'bad', sound: 'audio', broll: 'visual',
+  question: 'note', prod: 'note', plain: 'note'
+};
+
+function migrateTags(session) {
+  if (!session || !session.notes) return session;
+  for (const n of session.notes) {
+    if (n.tag === 'prod') n.untimed = true;
+    if (TAG_MIGRATION[n.tag]) n.tag = TAG_MIGRATION[n.tag];
+    if (!TAGS[n.tag]) n.tag = DEFAULT_TAG;
+  }
+  return session;
+}
 
 const BY_NUM = {};
 const BY_SIGIL = {};
@@ -153,7 +170,7 @@ function newSession(leadSec) {
 
 /** Where a note lands in the footage, in seconds. Null means "no timecode". */
 function noteSeconds(session, note) {
-  if (note.tag === 'prod' || !session.startedAt) return null;
+  if (note.untimed || !session.startedAt) return null;
   const base = (note.keyDownAt - session.startedAt) / 1000;
   return Math.max(0, base + session.offsetSec + session.leadSec + (note.nudgeSec || 0));
 }
@@ -240,7 +257,7 @@ function buildMarkdown(session, rate) {
 
   const untimed = sortedNotes(session).filter((n) => noteSeconds(session, n) === null);
   if (untimed.length) {
-    lines.push('', '### Production notes', '');
+    lines.push('', '### Untimed', '');
     for (const note of untimed) lines.push(`- ${note.text || '—'}`);
   }
   return lines.join('\n') + '\n';
@@ -392,7 +409,7 @@ class TimecodeNotesView extends ItemView {
     /* --- tag buttons, for the mouse --- */
     const tagRow = root.createDiv({ cls: 'tcnotes-tags' });
     for (const tag of TAG_ORDER) {
-      if (tag === 'plain') continue;
+      if (tag === DEFAULT_TAG) continue;
       const btn = tagRow.createEl('button', { cls: `tcnotes-tag tcnotes-tag-${tag}` });
       btn.createSpan({ cls: 'tcnotes-dot' });
       btn.createSpan({ text: TAGS[tag].label });
@@ -563,13 +580,15 @@ class TimecodeNotesView extends ItemView {
 
   commit() {
     let text = this.captureInput.value.replace(/^\s+/, '');
-    let tag = 'plain';
+    let tag = DEFAULT_TAG;
+    let explicit = false;
     if (text.length && BY_SIGIL[text.charAt(0)]) {
       tag = BY_SIGIL[text.charAt(0)];
+      explicit = true;
       text = text.slice(1);
     }
     text = text.trim();
-    if (!text && tag === 'plain') { this.captureInput.value = ''; this.draftStampedAt = null; return; }
+    if (!text && !explicit) { this.captureInput.value = ''; this.draftStampedAt = null; return; }
 
     this.addNote(tag, text, this.draftStampedAt || Date.now());
     this.captureInput.value = '';
@@ -579,16 +598,14 @@ class TimecodeNotesView extends ItemView {
 
   addNote(tag, text, keyDownAt) {
     const s = this.session;
-    // Before the timer starts there is nothing to anchor to, so a bare note
-    // becomes a production note rather than a marker at zero.
-    const effective = (!s.startedAt && tag === 'plain') ? 'prod' : tag;
 
     s.notes.push({
       id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       wallClock: new Date(keyDownAt).toISOString(),
       keyDownAt,
       committedAt: Date.now(),
-      tag: effective,
+      tag,
+      untimed: !s.startedAt,     // nothing to anchor to before the timer runs
       text: text || '',
       nudgeSec: 0
     });
@@ -788,7 +805,7 @@ module.exports = class TimecodeNotesPlugin extends Plugin {
     await this.loadSettings();
 
     const saved = await this.loadData();
-    this.session = (saved && saved.session) ? saved.session : newSession(this.settings.leadSec);
+    this.session = migrateTags((saved && saved.session) ? saved.session : newSession(this.settings.leadSec));
 
     this.registerView(VIEW_TYPE, (leaf) => new TimecodeNotesView(leaf, this));
 

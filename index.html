@@ -38,13 +38,13 @@
   --dim:         #7c7c83;
 
   /* safe / caution / warning are lifted straight from the food.me palette */
-  --good:     #2ecc71;
-  --ng:       #e74c3c;
-  --sound:    #f0a500;
-  --broll:    #35c3d6;
-  --question: #a78bfa;
-  --prod:     #8496c4;
-  --plain:    #8b93a3;
+  --danger: #e74c3c;   /* UI red: stop, delete. Not a tag colour. */
+
+  --note:   #8496c4;
+  --good:   #2ecc71;
+  --bad:    #e74c3c;
+  --audio:  #f0a500;
+  --visual: #35c3d6;
 
   --r-sm: 8px;
   --r: 12px;
@@ -142,7 +142,7 @@ input, select { font-family: inherit; }
 }
 .btn.primary:hover { background: var(--gold-bright); border-color: var(--gold-bright); }
 .btn.primary.stop {
-  background: var(--ng); border-color: var(--ng); color: var(--text);
+  background: var(--danger); border-color: var(--danger); color: var(--text);
 }
 .btn.primary.stop:hover { background: #ff5c4a; border-color: #ff5c4a; }
 
@@ -292,9 +292,9 @@ section + section { margin-top: var(--sp-5); }
 .num.wide { width: 108px; }
 .num.following { color: var(--gold); border-color: var(--gold); }
 .btn.ghost.on { background: var(--gold-tint); border-color: var(--gold); color: var(--gold); }
-.btn.danger { color: var(--ng); }
-.btn.danger:hover { background: rgba(231,76,60,.12); border-color: var(--ng); color: var(--ng); }
-.btn.danger.armed { background: var(--ng); border-color: var(--ng); color: var(--text); }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover { background: rgba(231,76,60,.12); border-color: var(--danger); color: var(--danger); }
+.btn.danger.armed { background: var(--danger); border-color: var(--danger); color: var(--text); }
 
 .num {
   width: 66px; background: var(--bg); border: 1px solid var(--border);
@@ -312,7 +312,7 @@ section + section { margin-top: var(--sp-5); }
   align-items: center; gap: var(--sp-3);
   padding: 10px var(--sp-3); margin-bottom: 5px;
   background: var(--surface); border: 1px solid var(--border);
-  border-left: 3px solid var(--plain); border-radius: var(--r-sm);
+  border-left: 3px solid var(--note); border-radius: var(--r-sm);
   transition: border-color var(--t-fast), background var(--t-fast);
 }
 .note:hover { background: var(--surface-2); }
@@ -534,23 +534,21 @@ kbd {
 
     <div class="cheat-sub">Instant markers — one key, nothing to type</div>
     <div class="cheat-grid">
-      <div><kbd>1</kbd><span class="chip" style="color:var(--good)">Good</span><span>the take to use</span></div>
-      <div><kbd>2</kbd><span class="chip" style="color:var(--ng)">No good</span><span>don't use this one</span></div>
-      <div><kbd>3</kbd><span class="chip" style="color:var(--sound)">Sound</span><span>audio problem to fix</span></div>
-      <div><kbd>4</kbd><span class="chip" style="color:var(--broll)">B-roll</span><span>cutaway opportunity</span></div>
-      <div><kbd>5</kbd><span class="chip" style="color:var(--question)">Question</span><span>flag it for the edit</span></div>
-      <div><kbd>6</kbd><span class="chip" style="color:var(--prod)">Note</span><span>production note, never a marker</span></div>
+      <div><kbd>1</kbd><span class="chip" style="color:var(--note)">Note</span><span>anything worth a timecode</span></div>
+      <div><kbd>2</kbd><span class="chip" style="color:var(--good)">Good</span><span>the take to use</span></div>
+      <div><kbd>3</kbd><span class="chip" style="color:var(--bad)">Bad</span><span>don't use this one</span></div>
+      <div><kbd>4</kbd><span class="chip" style="color:var(--audio)">Audio</span><span>sound problem to fix</span></div>
+      <div><kbd>5</kbd><span class="chip" style="color:var(--visual)">Visual</span><span>anything you can see</span></div>
     </div>
 
     <div class="cheat-sub">Tag as you type — first character of the note</div>
     <div class="cheat-grid">
       <div><kbd>*</kbd><span class="chip" style="color:var(--good)">Good</span><span class="eg">*lovely wide shot</span></div>
-      <div><kbd>!</kbd><span class="chip" style="color:var(--ng)">No good</span><span class="eg">!boom in frame</span></div>
-      <div><kbd>~</kbd><span class="chip" style="color:var(--broll)">B-roll</span><span class="eg">~cutaway of her hands</span></div>
-      <div><kbd>?</kbd><span class="chip" style="color:var(--question)">Question</span><span class="eg">?does this cut together</span></div>
-      <div><kbd>#</kbd><span class="chip" style="color:var(--prod)">Note</span><span class="eg">#relight tomorrow</span></div>
+      <div><kbd>!</kbd><span class="chip" style="color:var(--bad)">Bad</span><span class="eg">!boom in frame</span></div>
+      <div><kbd>@</kbd><span class="chip" style="color:var(--audio)">Audio</span><span class="eg">@aircon hum</span></div>
+      <div><kbd>~</kbd><span class="chip" style="color:var(--visual)">Visual</span><span class="eg">~cutaway of her hands</span></div>
     </div>
-    <p class="cheat-foot">Sound has no shortcut character — use <kbd>3</kbd>, or retag afterwards with <b>cycle</b>. Production notes never become markers.</p>
+    <p class="cheat-foot">Notes taken before you press <b>Start</b> stay untimed and never become markers. Retag anything afterwards with <b>cycle</b>.</p>
   </details>
 </main>
 
@@ -596,15 +594,22 @@ kbd {
 
   // `num` is the instant-marker digit; `sigil` retags a note as you type it.
   var TAGS = {
-    good:     { num: '1', sigil: '*',  label: 'Good',     color: 'Green',  css: '--good' },
-    ng:       { num: '2', sigil: '!',  label: 'No good',  color: 'Red',    css: '--ng' },
-    sound:    { num: '3', sigil: null, label: 'Sound',    color: 'Yellow', css: '--sound' },
-    broll:    { num: '4', sigil: '~',  label: 'B-roll',   color: 'Cyan',   css: '--broll' },
-    question: { num: '5', sigil: '?',  label: 'Question', color: 'Purple', css: '--question' },
-    prod:     { num: '6', sigil: '#',  label: 'Note',     color: 'Blue',   css: '--prod' },
-    plain:    { num: null, sigil: null, label: 'Mark',    color: 'Blue',   css: '--plain' }
+    note:   { num: '1', sigil: null, label: 'Note',   color: 'Blue',   css: '--note' },
+    good:   { num: '2', sigil: '*',  label: 'Good',   color: 'Green',  css: '--good' },
+    bad:    { num: '3', sigil: '!',  label: 'Bad',    color: 'Red',    css: '--bad' },
+    audio:  { num: '4', sigil: '@',  label: 'Audio',  color: 'Yellow', css: '--audio' },
+    visual: { num: '5', sigil: '~',  label: 'Visual', color: 'Cyan',   css: '--visual' }
   };
-  var TAG_ORDER = ['good', 'ng', 'sound', 'broll', 'question', 'prod', 'plain'];
+  var TAG_ORDER = ['note', 'good', 'bad', 'audio', 'visual'];
+  var DEFAULT_TAG = 'note';
+
+  /* Tags from before the set was simplified. Old sessions keep working, and
+   * production notes keep their untimed nature — which now belongs to the note
+   * rather than to a special tag. */
+  var TAG_MIGRATION = {
+    ng: 'bad', sound: 'audio', broll: 'visual',
+    question: 'note', prod: 'note', plain: 'note'
+  };
 
   var BY_NUM = {}, BY_SIGIL = {};
   TAG_ORDER.forEach(function (k) {
@@ -706,12 +711,26 @@ kbd {
     };
   }
 
-  var state = load() || { sessions: [newSession()], activeId: null };
+  /* Old saved sessions predate the simplified tag set. Fold them forward so a
+   * vault of past shoots keeps rendering. */
+  function migrateTags(st) {
+    if (!st || !st.sessions) return st;
+    st.sessions.forEach(function (s) {
+      (s.notes || []).forEach(function (n) {
+        if (n.tag === 'prod') n.untimed = true;
+        if (TAG_MIGRATION[n.tag]) n.tag = TAG_MIGRATION[n.tag];
+        if (!TAGS[n.tag]) n.tag = DEFAULT_TAG;
+      });
+    });
+    return st;
+  }
+
+  var state = migrateTags(load()) || { sessions: [newSession()], activeId: null };
   if (!state.activeId) state.activeId = state.sessions[0].id;
   if (!state.sortMode) state.sortMode = 'capture-desc';
   if (!state.lastRateId) state.lastRateId = DEFAULT_RATE;
 
-  var ui = { composerOpen: false, draftTag: 'plain', draftKeyDownAt: 0, filter: null };
+  var ui = { composerOpen: false, draftTag: DEFAULT_TAG, draftExplicit: false, draftKeyDownAt: 0, filter: null };
 
   function session() {
     for (var i = 0; i < state.sessions.length; i++) {
@@ -741,7 +760,7 @@ kbd {
 
   /** Where a note lands in the footage, in seconds. Null means "no timecode". */
   function noteSeconds(s, note) {
-    if (note.tag === 'prod' || !s.startedAt) return null;
+    if (note.untimed || !s.startedAt) return null;
     var base = (note.keyDownAt - s.startedAt) / 1000;
     return Math.max(0, base + s.offsetSec + s.leadSec + (note.nudgeSec || 0));
   }
@@ -877,10 +896,11 @@ kbd {
     var s = session();
     ui.composerOpen = true;
     ui.draftKeyDownAt = stampedAt || Date.now();
-    ui.draftTag = 'plain';
+    ui.draftTag = DEFAULT_TAG;
+    ui.draftExplicit = false;
 
     var text = firstChar || '';
-    if (text && BY_SIGIL[text]) { ui.draftTag = BY_SIGIL[text]; text = ''; }
+    if (text && BY_SIGIL[text]) { ui.draftTag = BY_SIGIL[text]; ui.draftExplicit = true; text = ''; }
 
     el.composerInput.value = text;
     el.composer.classList.remove('hidden');
@@ -899,8 +919,9 @@ kbd {
     // silently throwing its text away.
     if (ui.composerOpen) commitComposer();
     openComposer('', stampedAt);
-    if (tag && tag !== 'plain') {
+    if (tag) {
       ui.draftTag = tag;
+      ui.draftExplicit = true;
       paintChip(el.composerTag, tag);
     }
   }
@@ -923,7 +944,7 @@ kbd {
       trimmed = trimmed.slice(1);
     }
     var text = trimmed.trim();
-    if (!text && tag === 'plain') { closeComposer(); return; }
+    if (!text && !ui.draftExplicit) { closeComposer(); return; }
 
     addNote(tag, text, ui.draftKeyDownAt);
     closeComposer();
@@ -933,14 +954,13 @@ kbd {
     var s = session();
     // Before the timer starts there is nothing to anchor to, so a bare note
     // becomes a production note rather than a marker at zero.
-    var effective = (!s.startedAt && tag === 'plain') ? 'prod' : tag;
-
     s.notes.push({
       id: 'n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
       wallClock: new Date(keyDownAt).toISOString(),
       keyDownAt: keyDownAt,
       committedAt: Date.now(),
-      tag: effective,
+      tag: tag,
+      untimed: !s.startedAt,     // nothing to anchor to before the timer runs
       text: text || '',
       nudgeSec: 0
     });
@@ -1196,7 +1216,7 @@ kbd {
 
     var untimed = sortedNotes(s).filter(function (n) { return noteSeconds(s, n) === null; });
     if (untimed.length) {
-      lines.push('', '## Production notes', '');
+      lines.push('', '## Untimed', '');
       untimed.forEach(function (n) { lines.push('- ' + (n.text || '—')); });
     }
     return lines.join('\n') + '\n';
@@ -1333,11 +1353,11 @@ kbd {
     plain.textContent = '+ Note';
     plain.title = 'Start a note now';
     plain.addEventListener('mousedown', function (e) { e.preventDefault(); });
-    plain.addEventListener('click', function () { startNote('plain', Date.now()); });
+    plain.addEventListener('click', function () { startNote(DEFAULT_TAG, Date.now()); });
     el.tagButtons.appendChild(plain);
 
     TAG_ORDER.forEach(function (tag) {
-      if (tag === 'plain') return;
+      if (tag === DEFAULT_TAG) return;
       var b = document.createElement('button');
       b.className = 'tagbtn';
       b.title = TAGS[tag].label + ' — key ' + TAGS[tag].num;

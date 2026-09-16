@@ -36,8 +36,8 @@ discards it.
 | any letter | stamp the time and start a note |
 | `Enter` | commit — or open an empty note |
 | `Esc` | discard the note in progress |
-| `1`–`6` | instant tagged marker, nothing to type |
-| `*` `!` `~` `?` `#` | first character of a note sets its tag |
+| `1`–`5` | instant tagged marker, nothing to type |
+| `*` `!` `@` `~` | first character of a note sets its tag |
 
 **On a phone or tablet** there is no keystroke to start a note, so every tag is
 also a button: tap one and it stamps the time, opens the note and raises the
@@ -45,9 +45,13 @@ keyboard. Type and hit **Add**, or add nothing and you have a bare marker. The
 **+ Note** button does the same without choosing a tag. Tapping a different tag
 while something is half-typed files that note rather than discarding it.
 
-The six tags map to what an editor actually does next: **Good**, **No good**,
-**Sound**, **B-roll**, **Question**, and **Note** (a production note, which never
-becomes a marker).
+Five tags, in the order they sit on the keys: **Note**, **Good**, **Bad**,
+**Audio**, **Visual**. Note is what you get if you just type without choosing
+one.
+
+Anything jotted **before you press Start** stays untimed and never becomes a
+marker — there is nothing to anchor it to. It still travels with the session and
+lands under its own heading in the markdown.
 
 Click any note's **timecode** to type an exact time — useful when something only
 becomes clear later and you are at 30 minutes realising the note belongs at 22.

@@ -21,16 +21,16 @@ const check=(l,c,d)=>{ c?(pass++,console.log('  ok   '+l)):(fail++,console.log('
 
 const s = F.newSession(-3);
 s.startedAt = 1000000;
-const mk = (tag, text, off, nudge) => s.notes.push({
+const mk = (tag, text, off, nudge, untimed) => s.notes.push({
   id:'n'+off, wallClock:'', keyDownAt: s.startedAt + off*1000, committedAt:0,
-  tag, text, nudgeSec: nudge || 0 });
+  tag, text, nudgeSec: nudge || 0, untimed: !!untimed });
 
 mk('good','A',63);            // 00:01:00
-mk('ng','B',303);             // 00:05:00
-mk('prod','P',400);           // untimed
-mk('broll','C',723);          // 00:12:00
+mk('bad','B',303);             // 00:05:00
+mk('note','P',400, 0, true);  // untimed — taken before Start
+mk('visual','C',723);          // 00:12:00
 // typed last at 30 min, retimed back to 2 min
-mk('question','D',1803, 120 - 1800);
+mk('note','D',1803, 120 - 1800);
 
 const label = (n) => (n.text || '?') + '@' + (F.noteSeconds(s,n)===null ? 'untimed' : F.toClock(F.noteSeconds(s,n)));
 

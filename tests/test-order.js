@@ -26,10 +26,10 @@ const mk = (tag, text, off) => s.notes.push({
   keyDownAt: s.startedAt + off*1000, committedAt:0, tag, text, nudgeSec:0 });
 
 mk('good','first thing',10);
-mk('ng','second thing',65);
-mk('prod','a production note',200);
-mk('broll','third thing',400);
-mk('question','last thing',900);
+mk('bad','second thing',65);
+mk('note','a production note',200);
+mk('visual','third thing',400);
+mk('note','last thing',900);
 
 let pass=0, fail=0;
 const check=(l,c,d)=>{ c?(pass++,console.log('  ok   '+l)):(fail++,console.log('  FAIL '+l+(d?'  -> '+d:''))); };
