@@ -82,8 +82,15 @@ By default a session starts at `00:00:00:00`. Set a **start timecode** under
 Adjust timing and every note moves onto the camera's clock — which is what you
 want when the cameras are jammed to time of day.
 
-The **Local** and **UTC** buttons read the instant the session actually started,
-so pressing them after the fact still gives the right answer. **Zero** clears it.
+**Local** and **UTC** are toggles, not one-shot buttons. While one is on, the
+start timecode is *derived* from the instant you press Start — so you can arm it
+long before the shoot and it still lands exactly right. There is no window in
+which the operator has to be quick. The field shows the live clock until you
+roll, then locks.
+
+Turning a toggle off holds whatever it currently reads, so dropping out of follow
+never moves notes you already have. Typing in the field, or pressing **Zero**,
+also drops out of follow.
 
 What this does and does not shift:
 

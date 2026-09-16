@@ -290,6 +290,8 @@ section + section { margin-top: var(--sp-5); }
 .ratepick:focus { outline: none; border-color: var(--gold); }
 
 .num.wide { width: 108px; }
+.num.following { color: var(--gold); border-color: var(--gold); }
+.btn.ghost.on { background: var(--gold-tint); border-color: var(--gold); color: var(--gold); }
 .btn.danger { color: var(--ng); }
 .btn.danger:hover { background: rgba(231,76,60,.12); border-color: var(--ng); color: var(--ng); }
 .btn.danger.armed { background: var(--ng); border-color: var(--ng); color: var(--text); }
@@ -487,7 +489,7 @@ kbd {
           </div>
         </div>
         <div class="ctl">
-          <label for="startTc">Start timecode<span class="hint">what the camera reads at zero</span></label>
+          <label for="startTc">Start timecode<span class="hint" id="tcHint">what the camera reads at zero</span></label>
           <div class="ctl-row">
             <input type="text" id="startTc" class="num wide" autocomplete="off" spellcheck="false">
             <button id="tcLocal" class="btn ghost tiny" title="Set from the local time the session started">Local</button>
@@ -698,6 +700,7 @@ kbd {
       stoppedAt: null,
       offsetSec: 0,
       startTcSec: 0,             // what timecode the session's zero maps to
+      tcMode: 'manual',          // 'manual' | 'local' | 'utc'
       leadSec: -3,               // you always notice it late
       notes: []
     };
@@ -748,7 +751,18 @@ kbd {
   /* Seconds from the session's zero, expressed on the camera's clock. Zero
    * unless a start timecode is set, which is what makes time-of-day jammed
    * cameras line up without any further arithmetic. */
-  function absSec(s, sec) { return (s.startTcSec || 0) + sec; }
+  /* When following the time of day this is DERIVED from the instant the
+   * session actually started, not from whenever the button was pressed. That
+   * removes the race where setting it early and rolling late silently shifts
+   * every marker by the gap between the two. */
+  function startTcOf(s) {
+    if (s.tcMode === 'local' || s.tcMode === 'utc') {
+      return timeOfDaySec(s.startedAt || Date.now(), s.tcMode === 'utc');
+    }
+    return s.startTcSec || 0;
+  }
+
+  function absSec(s, sec) { return startTcOf(s) + sec; }
 
   /** Seconds since local (or UTC) midnight at a given instant. */
   function timeOfDaySec(ms, utc) {
@@ -790,7 +804,7 @@ kbd {
   ['sessionTitle', 'sessionPicker', 'newSession', 'clock', 'tc', 'transport',
    'composer', 'composerTag', 'composerInput', 'composerStamp', 'capturePrompt',
    'offset', 'offsetNum', 'lead', 'leadNum', 'noteList', 'emptyState',
-   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate', 'startTc', 'tcLocal', 'tcUtc', 'tcZero', 'deleteSession', 'tagButtons', 'composerAdd', 'composerDrop']
+   'statDuration', 'statMarkers', 'statTags', 'toast', 'wakeBadge', 'sortMode', 'rate', 'startTc', 'tcLocal', 'tcUtc', 'tcZero', 'deleteSession', 'tagButtons', 'composerAdd', 'composerDrop', 'tcHint']
     .forEach(function (id) { el[id] = document.getElementById(id); });
 
   /* ----------------------------------------------------------- wake lock */
@@ -849,6 +863,11 @@ kbd {
     el.clock.classList.toggle('running', isRunning(s));
     el.tc.textContent = toTimecode(e, rateOf(s));
     el.statDuration.textContent = toClock(e);
+
+    if (!s.startedAt && (s.tcMode === 'local' || s.tcMode === 'utc') &&
+        document.activeElement !== el.startTc) {
+      el.startTc.value = toTimecode(startTcOf(s), rateOf(s));
+    }
     requestAnimationFrame(tickClock);
   }
 
@@ -972,9 +991,16 @@ kbd {
     el.lead.value = el.leadNum.value = s.leadSec;
     el.sortMode.value = state.sortMode;
     el.rate.value = s.rateId;
+    var following = s.tcMode === 'local' || s.tcMode === 'utc';
     if (document.activeElement !== el.startTc) {
-      el.startTc.value = toTimecode(s.startTcSec || 0, rateOf(s));
+      el.startTc.value = toTimecode(startTcOf(s), rateOf(s));
     }
+    el.startTc.classList.toggle('following', following);
+    el.tcLocal.classList.toggle('on', s.tcMode === 'local');
+    el.tcUtc.classList.toggle('on', s.tcMode === 'utc');
+    el.tcHint.textContent = following
+      ? (s.startedAt ? 'locked to when you rolled' : 'will lock to when you press Start')
+      : 'what the camera reads at zero';
     disarmDelete();
     el.transport.textContent = !s.startedAt ? 'Start' : (s.stoppedAt ? 'Resume' : 'Stop');
     el.transport.classList.toggle('stop', isRunning(s));
@@ -1127,7 +1153,7 @@ kbd {
         return;
       }
       // Typed as camera-clock time, stored relative to the session's zero.
-      var relative = Math.max(0, target - (s.startTcSec || 0));
+      var relative = Math.max(0, target - startTcOf(s));
       retime(s, note, relative);
       toast('Moved to ' + toClock(absSec(s, relative)));
     }
@@ -1197,8 +1223,8 @@ kbd {
     o.push('    ' + rateBlock);
     o.push('    <timecode>');
     o.push('      ' + rateBlock);
-    o.push('      <string>' + toTimecode(s.startTcSec || 0, rate) + '</string>' +
-           '<frame>' + toFrames(s.startTcSec || 0, rate) + '</frame>' +
+    o.push('      <string>' + toTimecode(startTcOf(s), rate) + '</string>' +
+           '<frame>' + toFrames(startTcOf(s), rate) + '</frame>' +
            '<displayformat>' + (rate.df ? 'DF' : 'NDF') + '</displayformat>');
     o.push('    </timecode>');
     o.push('    <media><video><format><samplecharacteristics>');
@@ -1346,7 +1372,25 @@ kbd {
 
   function setStartTc(sec) {
     var s = session();
+    s.tcMode = 'manual';
     s.startTcSec = Math.max(0, sec);
+    save();
+    render();
+  }
+
+  /* Toggling off freezes whatever it currently reads, so turning the follow
+   * off never moves the notes you already have. */
+  function setTcMode(mode) {
+    var s = session();
+    if (s.tcMode === mode) {
+      var frozen = startTcOf(s);
+      s.tcMode = 'manual';
+      s.startTcSec = frozen;
+      toast('Following off — held at ' + toTimecode(frozen, rateOf(s)));
+    } else {
+      s.tcMode = mode;
+      toast(mode === 'utc' ? 'Following UTC time of day' : 'Following local time of day');
+    }
     save();
     render();
   }
@@ -1359,19 +1403,13 @@ kbd {
       return;
     }
     setStartTc(parsed);
-    toast('Start timecode ' + toTimecode(session().startTcSec, rateOf(session())));
+    toast('Start timecode ' + toTimecode(startTcOf(session()), rateOf(session())));
   });
 
   /* Time-of-day buttons read the instant the session actually started, so
    * pressing them after the fact still gives the right answer. */
-  function todFor(utc) {
-    var s = session();
-    setStartTc(timeOfDaySec(s.startedAt || Date.now(), utc));
-    toast((utc ? 'UTC' : 'Local') + ' time of day — ' +
-          toTimecode(session().startTcSec, rateOf(session())));
-  }
-  el.tcLocal.addEventListener('click', function () { todFor(false); });
-  el.tcUtc.addEventListener('click', function () { todFor(true); });
+  el.tcLocal.addEventListener('click', function () { setTcMode('local'); });
+  el.tcUtc.addEventListener('click', function () { setTcMode('utc'); });
   el.tcZero.addEventListener('click', function () { setStartTc(0); toast('Start timecode cleared'); });
 
   /* Deleting is two clicks rather than a dialog: the button arms itself, and

@@ -145,6 +145,7 @@ function newSession(leadSec) {
     stoppedAt: null,
     offsetSec: 0,
     startTcSec: 0,             // what timecode the session's zero maps to
+    tcMode: 'manual',          // 'manual' | 'local' | 'utc'
     leadSec: leadSec,
     notes: []
   };
@@ -162,7 +163,18 @@ function noteSeconds(session, note) {
 /* Seconds from the session's zero, expressed on the camera's clock. Zero unless
  * a start timecode is set, which is what makes time-of-day jammed cameras line
  * up without any further arithmetic. */
-const absSec = (s, sec) => (s.startTcSec || 0) + sec;
+/* When following the time of day this is DERIVED from the instant the session
+ * actually started, not from whenever the button was pressed. That removes the
+ * race where setting it early and rolling late silently shifts every marker by
+ * the gap between the two. */
+function startTcOf(s) {
+  if (s.tcMode === 'local' || s.tcMode === 'utc') {
+    return timeOfDaySec(s.startedAt || Date.now(), s.tcMode === 'utc');
+  }
+  return s.startTcSec || 0;
+}
+
+const absSec = (s, sec) => startTcOf(s) + sec;
 
 /** Seconds since local (or UTC) midnight at a given instant. */
 function timeOfDaySec(ms, utc) {
@@ -254,8 +266,8 @@ function buildFcpXml(session, rate) {
     `    ${rateBlock}`,
     '    <timecode>',
     `      ${rate}`,
-    `      <string>${toTimecode(session.startTcSec || 0, rate)}</string>` +
-    `<frame>${toFrames(session.startTcSec || 0, rate)}</frame>` +
+    `      <string>${toTimecode(startTcOf(session), rate)}</string>` +
+    `<frame>${toFrames(startTcOf(session), rate)}</frame>` +
     `<displayformat>${rate.df ? 'DF' : 'NDF'}</displayformat>`,
     '    </timecode>',
     '    <media><video><format><samplecharacteristics>',
@@ -452,23 +464,37 @@ class TimecodeNotesView extends ItemView {
       this.setStartTc(parsed);
     });
 
-    const tod = (utc) => {
-      const s = this.session;
-      this.setStartTc(timeOfDaySec(s.startedAt || Date.now(), utc));
-    };
-    const local = row.createEl('button', { text: 'Local' });
-    this.registerDomEvent(local, 'click', () => tod(false));
-    const utcBtn = row.createEl('button', { text: 'UTC' });
-    this.registerDomEvent(utcBtn, 'click', () => tod(true));
+    this.localBtn = row.createEl('button', { text: 'Local' });
+    this.registerDomEvent(this.localBtn, 'click', () => this.setTcMode('local'));
+    this.utcBtn = row.createEl('button', { text: 'UTC' });
+    this.registerDomEvent(this.utcBtn, 'click', () => this.setTcMode('utc'));
     const zero = row.createEl('button', { text: 'Zero' });
     this.registerDomEvent(zero, 'click', () => this.setStartTc(0));
   }
 
+  /* Toggling off freezes whatever it currently reads, so turning the follow off
+   * never moves the notes you already have. */
+  setTcMode(mode) {
+    const s = this.session;
+    if (s.tcMode === mode) {
+      const frozen = startTcOf(s);
+      s.tcMode = 'manual';
+      s.startTcSec = frozen;
+      new Notice(`Following off — held at ${toTimecode(frozen, rateById(this.plugin.settings.rateId))}`);
+    } else {
+      s.tcMode = mode;
+      new Notice(mode === 'utc' ? 'Following UTC time of day' : 'Following local time of day');
+    }
+    this.plugin.persist();
+    this.render();
+  }
+
   setStartTc(sec) {
+    this.session.tcMode = 'manual';
     this.session.startTcSec = Math.max(0, sec);
     this.plugin.persist();
     this.render();
-    new Notice(`Start timecode ${toTimecode(this.session.startTcSec, rateById(this.plugin.settings.rateId))}`);
+    new Notice(`Start timecode ${toTimecode(startTcOf(this.session), rateById(this.plugin.settings.rateId))}`);
   }
 
   numberRow(parent, label, key) {
@@ -605,7 +631,7 @@ class TimecodeNotesView extends ItemView {
         return;
       }
       // Typed as camera-clock time, stored relative to the session's zero.
-      const relative = Math.max(0, target - (this.session.startTcSec || 0));
+      const relative = Math.max(0, target - startTcOf(this.session));
       this.retime(note, relative);
       new Notice(`Moved to ${toClock(absSec(this.session, relative))}`);
     };
@@ -625,7 +651,12 @@ class TimecodeNotesView extends ItemView {
     this.titleInput.value = s.title;
     this.offsetInput.value = s.offsetSec;
     if (this.startTcInput && document.activeElement !== this.startTcInput) {
-      this.startTcInput.value = toTimecode(s.startTcSec || 0, rateById(this.plugin.settings.rateId));
+      this.startTcInput.value = toTimecode(startTcOf(s), rateById(this.plugin.settings.rateId));
+    }
+    if (this.localBtn) {
+      this.localBtn.toggleClass('tcnotes-on', s.tcMode === 'local');
+      this.utcBtn.toggleClass('tcnotes-on', s.tcMode === 'utc');
+      this.startTcInput.toggleClass('tcnotes-following', s.tcMode === 'local' || s.tcMode === 'utc');
     }
     this.leadInput.value = s.leadSec;
     this.transportBtn.setText(!s.startedAt ? 'Start' : (s.stoppedAt ? 'Resume' : 'Stop'));

@@ -304,3 +304,10 @@
 }
 .tcnotes-starttc:focus { border-color: var(--tc-gold); }
 .tcnotes-numrow button { font-size: 0.72em; padding: 2px 8px; border-radius: 999px; }
+
+.tcnotes-numrow button.tcnotes-on {
+  background-color: var(--tc-gold-tint);
+  border: 1px solid var(--tc-gold);
+  color: var(--tc-gold);
+}
+.tcnotes-starttc.tcnotes-following { color: var(--tc-gold); border-color: var(--tc-gold); }

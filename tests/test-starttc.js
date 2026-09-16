@@ -13,7 +13,7 @@ const src = fs.readFileSync(require('path').join(__dirname, '..', 'obsidian', 't
 const body = src.replace(/^'use strict';/m,'').replace(/const \{ Plugin[^;]+;/,'')
   .replace(/module\.exports = class[\s\S]*$/,'');
 const F = new Function('require','ItemView','PluginSettingTab',
-  body + '\nreturn { absSec, timeOfDaySec, toTimecode, toFrames, framesToTimecode, rateById, newSession, buildMarkdown, buildFcpXml, markerNotes };'
+  body + '\nreturn { absSec, timeOfDaySec, toTimecode, toFrames, framesToTimecode, rateById, newSession, buildMarkdown, buildFcpXml, markerNotes, startTcOf };'
 )(require, Base, Base);
 const R = (id) => F.rateById(id);
 
@@ -57,6 +57,40 @@ const before = (F.buildFcpXml(s, rate).match(/<in>\d+<\/in>/g)||[]).join();
 s.startTcSec = 0;
 const after = (F.buildFcpXml(s, rate).match(/<in>\d+<\/in>/g)||[]).join();
 check('marker frames unchanged when start TC changes', before === after, before + ' vs ' + after);
+
+console.log('\nfollow-the-clock mode is derived, not snapshotted:');
+{
+  const rolled = new Date(2026, 8, 16, 9, 31, 25, 0).getTime();
+  const f = F.newSession(-3);
+
+  // Turned on long before rolling — the value must come from the roll, not now.
+  f.tcMode = 'local';
+  f.startedAt = null;
+  const beforeRolling = F.startTcOf(f);
+  f.startedAt = rolled;
+  const afterRolling = F.startTcOf(f);
+
+  check('before rolling it reads the current clock', typeof beforeRolling === 'number');
+  check('after rolling it reads the START instant, not the toggle time',
+        afterRolling === 9*3600 + 31*60 + 25, String(afterRolling));
+  check('a later re-read gives the same answer', F.startTcOf(f) === afterRolling);
+
+  f.tcMode = 'utc';
+  const utc = F.startTcOf(f);
+  check('utc mode differs from local by whole minutes',
+        Math.abs((afterRolling - utc) % 60) === 0, String(utc));
+
+  // Freezing on toggle-off must hold the exact value.
+  const frozen = F.startTcOf(f);
+  f.tcMode = 'manual';
+  f.startTcSec = frozen;
+  check('frozen value is held exactly', F.startTcOf(f) === frozen, String(F.startTcOf(f)));
+
+  // Manual mode must ignore startedAt entirely.
+  f.startTcSec = 10*3600;
+  f.startedAt = rolled + 999999;
+  check('manual ignores the start instant', F.startTcOf(f) === 10*3600, String(F.startTcOf(f)));
+}
 
 console.log('\n' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail?1:0);
